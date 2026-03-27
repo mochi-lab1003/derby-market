@@ -2,8 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { useState } from "react";
-
-const HORSES = ["01", "02", "03", "04", "05"];
+import { supabase } from "@/lib/supabase";
 
 const SAMPLE_HANDS = {
   p1: [
@@ -37,6 +36,8 @@ const SAMPLE_PUBLIC = [
   { horse: "05", count: 1, hasTrait: false, odds: 4.8 },
 ];
 
+const ROOM_ID = "room-alpha";
+
 export default function DerbyPlayerPage() {
   const params = useParams();
   const playerId = String(params.id || "").toLowerCase();
@@ -46,6 +47,35 @@ export default function DerbyPlayerPage() {
   const [betAmount, setBetAmount] = useState(3);
   const [selectedCardId, setSelectedCardId] = useState(null);
   const [confirmed, setConfirmed] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+
+  const handleConfirm = async () => {
+    setSaving(true);
+    setMessage("");
+
+    const { error } = await supabase.from("derby_bets").upsert(
+      {
+        room_id: ROOM_ID,
+        player_id: playerId,
+        selected_horse: selectedHorse,
+        bet_amount: betAmount,
+        is_ready: true,
+      },
+      { onConflict: "room_id,player_id" }
+    );
+
+    setSaving(false);
+
+    if (error) {
+      setConfirmed(false);
+      setMessage(`保存失敗: ${error.message}`);
+      return;
+    }
+
+    setConfirmed(true);
+    setMessage("賭けを確定した。");
+  };
 
   return (
     <main style={{ minHeight: "100vh", background: "#050505", color: "#f5f5f5", padding: 24 }}>
@@ -55,14 +85,7 @@ export default function DerbyPlayerPage() {
           Player: <strong>{playerId.toUpperCase()}</strong>
         </p>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "320px 1fr",
-            gap: 24,
-            alignItems: "start",
-          }}
-        >
+        <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 24, alignItems: "start" }}>
           <section style={{ border: "1px solid #262626", borderRadius: 16, padding: 16 }}>
             <h2 style={{ marginBottom: 12 }}>Your Hand</h2>
 
@@ -88,33 +111,12 @@ export default function DerbyPlayerPage() {
                 </button>
               ))}
             </div>
-
-            <div
-              style={{
-                marginTop: 16,
-                padding: 12,
-                borderRadius: 12,
-                border: "1px solid #2f2f2f",
-                background: "#0f0f0f",
-                color: "#cfcfcf",
-                fontSize: 14,
-                lineHeight: 1.6,
-              }}
-            >
-              ここは個室。自分の手札と自分の賭けだけを扱う。
-            </div>
           </section>
 
           <section style={{ border: "1px solid #262626", borderRadius: 16, padding: 16 }}>
             <h2 style={{ marginBottom: 12 }}>Public Market</h2>
 
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-                gap: 16,
-              }}
-            >
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16 }}>
               {SAMPLE_PUBLIC.map((entry) => (
                 <button
                   key={entry.horse}
@@ -142,25 +144,10 @@ export default function DerbyPlayerPage() {
               ))}
             </div>
 
-            <div
-              style={{
-                marginTop: 24,
-                display: "grid",
-                gridTemplateColumns: "1fr 160px 180px",
-                gap: 12,
-                alignItems: "end",
-              }}
-            >
+            <div style={{ marginTop: 24, display: "grid", gridTemplateColumns: "1fr 160px 180px", gap: 12, alignItems: "end" }}>
               <div>
                 <div style={{ fontSize: 13, color: "#999", marginBottom: 6 }}>選択中の賭け先</div>
-                <div
-                  style={{
-                    padding: 12,
-                    borderRadius: 12,
-                    border: "1px solid #333",
-                    background: "#111",
-                  }}
-                >
+                <div style={{ padding: 12, borderRadius: 12, border: "1px solid #333", background: "#111" }}>
                   Horse {selectedHorse}
                 </div>
               </div>
@@ -184,32 +171,31 @@ export default function DerbyPlayerPage() {
               </div>
 
               <button
-                onClick={() => setConfirmed(true)}
+                onClick={handleConfirm}
+                disabled={saving}
                 style={{
                   padding: 12,
                   borderRadius: 12,
                   border: "1px solid #404040",
                   background: "#fafafa",
                   color: "#111",
-                  cursor: "pointer",
+                  cursor: saving ? "wait" : "pointer",
+                  opacity: saving ? 0.7 : 1,
                 }}
               >
-                賭けを確定
+                {saving ? "保存中..." : "賭けを確定"}
               </button>
             </div>
 
             {confirmed && (
-              <div
-                style={{
-                  marginTop: 16,
-                  padding: 12,
-                  borderRadius: 12,
-                  border: "1px solid #2f2f2f",
-                  background: "#111",
-                  color: "#d4d4d4",
-                }}
-              >
+              <div style={{ marginTop: 16, padding: 12, borderRadius: 12, border: "1px solid #2f2f2f", background: "#111", color: "#d4d4d4" }}>
                 {playerId.toUpperCase()} は Horse {selectedHorse} に {betAmount}c 賭けた。
+              </div>
+            )}
+
+            {message && (
+              <div style={{ marginTop: 12, color: "#cfcfcf", fontSize: 14 }}>
+                {message}
               </div>
             )}
           </section>

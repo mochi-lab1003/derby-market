@@ -1,456 +1,205 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { supabase } from "@/lib/supabase";
+import { ROOM_ID } from "@/lib/derbyConfig";
 
-const HORSES = ["01", "02", "03", "04", "05"];
-const PLAYERS = ["P1", "P2", "P3"];
+function HorseChip({ horse, widthPercent }) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "220px 1fr",
+        gap: 16,
+        alignItems: "center",
+      }}
+    >
+      <div
+        style={{
+          border: "1px solid #ddd",
+          borderRadius: 16,
+          padding: 14,
+          background: "#fff",
+        }}
+      >
+        <div style={{ fontWeight: 700, fontSize: 18 }}>{horse.display_name}</div>
+        <div style={{ fontSize: 13, color: "#666", marginTop: 4 }}>{horse.flavor_label}</div>
+        <div style={{ fontSize: 13, color: "#444", marginTop: 10 }}>
+          付与枚数: {horse.attached_count} / 単勝 x{horse.win_odds}
+        </div>
+      </div>
 
-const SAMPLE_PUBLIC = [
-  { horse: "01", count: 2, hasTrait: false },
-  { horse: "02", count: 1, hasTrait: true },
-  { horse: "03", count: 3, hasTrait: false },
-  { horse: "04", count: 0, hasTrait: false },
-  { horse: "05", count: 1, hasTrait: false },
-];
-
-const ODDS_BY_RANK = [2.0, 2.8, 3.6, 4.8, 6.0];
-
-function average(arr) {
-  return arr.reduce((sum, n) => sum + n, 0) / arr.length;
-}
-
-function computeOdds(entries) {
-  const withPopularity = entries.map((entry) => ({
-    ...entry,
-    popularity: entry.count + (entry.hasTrait ? 1 : 0),
-  }));
-
-  const sorted = [...withPopularity].sort((a, b) => b.popularity - a.popularity);
-
-  let currentRank = 1;
-  const rankMap = {};
-
-  for (let i = 0; i < sorted.length; i++) {
-    if (i > 0 && sorted[i].popularity < sorted[i - 1].popularity) {
-      currentRank = i + 1;
-    }
-    rankMap[sorted[i].horse] = currentRank;
-  }
-
-  const ranked = withPopularity.map((entry) => ({
-    ...entry,
-    rank: rankMap[entry.horse],
-  }));
-
-  const grouped = {};
-  ranked.forEach((entry, index) => {
-    if (!grouped[entry.rank]) grouped[entry.rank] = [];
-    grouped[entry.rank].push(index);
-  });
-
-  const odds = new Array(ranked.length).fill(0);
-
-  Object.entries(grouped).forEach(([rankText, indexes]) => {
-    const rank = Number(rankText);
-    const slice = ODDS_BY_RANK.slice(rank - 1, rank - 1 + indexes.length);
-    const value = Number(average(slice).toFixed(1));
-    indexes.forEach((idx) => {
-      odds[idx] = value;
-    });
-  });
-
-  return ranked.map((entry, i) => ({
-    ...entry,
-    odds: odds[i],
-  }));
-}
-
-function simulateRace(entries) {
-  const horses = entries.map((entry) => {
-    const base = 8;
-    const hiddenBoost = Math.random() * 4;
-    const traitBoost = entry.hasTrait ? Math.random() * 2.5 : 0;
-    const countEffect = entry.count * 1.2;
-    const final = Number((base + hiddenBoost + traitBoost + countEffect).toFixed(1));
-    return {
-      horse: entry.horse,
-      final,
-      count: entry.count,
-      hasTrait: entry.hasTrait,
-    };
-  });
-
-  const ranking = [...horses].sort((a, b) => b.final - a.final);
-
-  const logs = [];
-  ranking.forEach((h, index) => {
-    logs.push(`${index + 1}位: Horse ${h.horse} (${h.final})`);
-  });
-
-  return { ranking, logs };
+      <div
+        style={{
+          position: "relative",
+          height: 52,
+          borderRadius: 999,
+          background: "linear-gradient(to right, #f0f0f0, #fafafa)",
+          border: "1px solid #ddd",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            left: `${widthPercent}%`,
+            top: "50%",
+            transform: "translate(-50%, -50%)",
+            fontSize: 28,
+            transition: "left 800ms ease",
+          }}
+        >
+          ♞
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function DerbyHostPage() {
-  const [phase, setPhase] = useState("assign");
-  const [publicEntries, setPublicEntries] = useState(SAMPLE_PUBLIC);
-  const [readyMap, setReadyMap] = useState({
-    P1: false,
-    P2: false,
-    P3: false,
-  });
-  const [result, setResult] = useState(null);
+  const [room, setRoom] = useState(null);
+  const [horses, setHorses] = useState([]);
+  const [currentSegmentIndex, setCurrentSegmentIndex] = useState(-1);
 
-  const entriesWithOdds = useMemo(() => computeOdds(publicEntries), [publicEntries]);
+  async function load() {
+    const { data: roomData } = await supabase
+      .from("derby_rooms")
+      .select("*")
+      .eq("room_id", ROOM_ID)
+      .maybeSingle();
 
-  const allReady = PLAYERS.every((p) => readyMap[p]);
+    const { data: horseData } = await supabase
+      .from("derby_horses")
+      .select("*")
+      .eq("room_id", ROOM_ID)
+      .order("horse_id", { ascending: true });
 
-  const toggleReady = (player) => {
-    if (phase !== "bet") return;
-    setReadyMap((prev) => ({
-      ...prev,
-      [player]: !prev[player],
-    }));
-  };
+    setRoom(roomData || null);
+    setHorses(horseData || []);
+  }
 
-  const goToBet = () => {
-    setPhase("bet");
-    setResult(null);
-    setReadyMap({
-      P1: false,
-      P2: false,
-      P3: false,
-    });
-  };
+  useEffect(() => {
+    load();
+    const id = setInterval(load, 1500);
+    return () => clearInterval(id);
+  }, []);
 
-  const runRace = () => {
-    if (!allReady) return;
-    const sim = simulateRace(entriesWithOdds);
-    setResult(sim);
-    setPhase("result");
-  };
+  useEffect(() => {
+    if (!room?.result_payload?.segmentSnapshots?.length) {
+      setCurrentSegmentIndex(-1);
+      return;
+    }
 
-  const resetHost = () => {
-    setPhase("assign");
-    setPublicEntries(SAMPLE_PUBLIC);
-    setReadyMap({
-      P1: false,
-      P2: false,
-      P3: false,
-    });
-    setResult(null);
-  };
+    let index = -1;
+    const timer = setInterval(() => {
+      index += 1;
+      if (index >= room.result_payload.segmentSnapshots.length) {
+        clearInterval(timer);
+        return;
+      }
+      setCurrentSegmentIndex(index);
+    }, 1200);
+
+    return () => clearInterval(timer);
+  }, [room?.race_number, room?.phase]);
+
+  const animatedPositions = useMemo(() => {
+    if (!room?.result_payload?.segmentSnapshots?.length || currentSegmentIndex < 0) {
+      return {};
+    }
+
+    const snapshot = room.result_payload.segmentSnapshots[currentSegmentIndex];
+    const max = Math.max(...snapshot.positions.map((p) => p.total), 1);
+
+    return Object.fromEntries(
+      snapshot.positions.map((p) => [p.horse_id, Math.max(3, (p.total / max) * 92)])
+    );
+  }, [room?.result_payload, currentSegmentIndex]);
+
+  const currentSegment =
+    currentSegmentIndex >= 0 && room?.result_payload?.segmentSnapshots?.[currentSegmentIndex]
+      ? room.result_payload.segmentSnapshots[currentSegmentIndex].segment
+      : null;
 
   return (
-    <main style={{ minHeight: "100vh", background: "#050505", color: "#f5f5f5", padding: 24 }}>
-      <div style={{ maxWidth: 1280, margin: "0 auto" }}>
-        <div style={{ marginBottom: 24 }}>
-          <h1 style={{ fontSize: 32, marginBottom: 8 }}>DERBY MARKET / HOST</h1>
-          <p style={{ color: "#a3a3a3" }}>
-            中央画面。公開情報とレース進行だけを表示する。
-          </p>
+    <main style={{ minHeight: "100vh", background: "#fbfbf8", color: "#111", padding: 24 }}>
+      <div style={{ maxWidth: 1240, margin: "0 auto", display: "grid", gap: 24 }}>
+        <div>
+          <h1 style={{ fontSize: 34, marginBottom: 8 }}>DERBY MARKET</h1>
+          <div style={{ color: "#666" }}>白い試験走路 / 公開情報のみ表示</div>
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            gap: 10,
-            flexWrap: "wrap",
-            marginBottom: 20,
-          }}
-        >
-          <div
-            style={{
-              padding: "8px 14px",
-              borderRadius: 999,
-              border: "1px solid #2a2a2a",
-              background: "#111",
-            }}
-          >
-            Phase: <strong>{phase}</strong>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <div style={{ padding: "8px 14px", border: "1px solid #ddd", borderRadius: 999, background: "#fff" }}>
+            Room: {ROOM_ID}
           </div>
-
-          <div
-            style={{
-              padding: "8px 14px",
-              borderRadius: 999,
-              border: "1px solid #2a2a2a",
-              background: "#111",
-              color: allReady ? "#d4ffd4" : "#d4d4d4",
-            }}
-          >
-            Ready: {PLAYERS.filter((p) => readyMap[p]).length}/{PLAYERS.length}
+          <div style={{ padding: "8px 14px", border: "1px solid #ddd", borderRadius: 999, background: "#fff" }}>
+            Phase: {room?.phase || "setup"}
           </div>
+          <div style={{ padding: "8px 14px", border: "1px solid #ddd", borderRadius: 999, background: "#fff" }}>
+            Race: {room?.race_number || 1}
+          </div>
+          {currentSegment && (
+            <div style={{ padding: "8px 14px", border: "1px solid #111", borderRadius: 999, background: "#111", color: "#fff" }}>
+              Segment: {currentSegment}
+            </div>
+          )}
         </div>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 320px",
-            gap: 24,
-            alignItems: "start",
-          }}
-        >
-          <section
-            style={{
-              border: "1px solid #262626",
-              borderRadius: 18,
-              padding: 18,
-              background: "#080808",
-            }}
-          >
-            <div style={{ marginBottom: 14, fontSize: 20 }}>Public Market</div>
+        <section style={{ border: "1px solid #ddd", borderRadius: 24, background: "#fff", padding: 20 }}>
+          <div style={{ fontSize: 20, marginBottom: 16 }}>出走情報</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
+            {horses.map((horse) => (
+              <div key={horse.horse_id} style={{ border: "1px solid #eee", borderRadius: 18, padding: 16 }}>
+                <div style={{ fontWeight: 700, fontSize: 18 }}>{horse.display_name}</div>
+                <div style={{ color: "#666", fontSize: 13, marginTop: 4 }}>{horse.flavor_label}</div>
+                <div style={{ marginTop: 12, fontSize: 14 }}>付与枚数: {horse.attached_count}</div>
+                <div style={{ marginTop: 4, fontSize: 14 }}>特性: {horse.has_trait ? "あり" : "なし"}</div>
+                <div style={{ marginTop: 4, fontSize: 14 }}>単勝: x{horse.win_odds}</div>
+              </div>
+            ))}
+          </div>
+        </section>
 
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-                gap: 16,
-              }}
-            >
-              {entriesWithOdds.map((entry) => (
-                <div
-                  key={entry.horse}
-                  style={{
-                    border: "1px solid #232323",
-                    borderRadius: 16,
-                    padding: 16,
-                    background: "#0f0f0f",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      marginBottom: 12,
-                    }}
-                  >
-                    <strong>Horse {entry.horse}</strong>
-                    <span>x{entry.odds}</span>
-                  </div>
+        <section style={{ border: "1px solid #ddd", borderRadius: 24, background: "#fff", padding: 20 }}>
+          <div style={{ fontSize: 20, marginBottom: 16 }}>レース</div>
+          <div style={{ display: "grid", gap: 16 }}>
+            {horses.map((horse) => (
+              <HorseChip
+                key={horse.horse_id}
+                horse={horse}
+                widthPercent={animatedPositions[horse.horse_id] ?? 3}
+              />
+            ))}
+          </div>
+        </section>
 
-                  <div style={{ fontSize: 14, color: "#b4b4b4", lineHeight: 1.8 }}>
-                    <div>付与枚数: {entry.count}</div>
-                    <div>特性: {entry.hasTrait ? "あり" : "なし"}</div>
-                    <div>人気順位: {entry.rank}</div>
-                  </div>
+        <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+          <div style={{ border: "1px solid #ddd", borderRadius: 24, background: "#fff", padding: 20 }}>
+            <div style={{ fontSize: 20, marginBottom: 16 }}>最終順位</div>
+            <div style={{ display: "grid", gap: 12 }}>
+              {[...(room?.result_payload?.ranking || [])].map((row) => (
+                <div key={row.horse_id} style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid #f0f0f0", paddingBottom: 8 }}>
+                  <span>{row.final_rank}位 / {row.display_name}</span>
+                  <span>{Number(row.final_distance).toFixed(2)}</span>
                 </div>
               ))}
+              {!room?.result_payload?.ranking?.length && <div style={{ color: "#888" }}>まだ結果はありません。</div>}
             </div>
+          </div>
 
-            {phase === "result" && result && (
-              <div style={{ marginTop: 24 }}>
-                <div style={{ marginBottom: 10, fontSize: 20 }}>Race View</div>
-
-                <div style={{ display: "grid", gap: 12 }}>
-                  {result.ranking.map((h, index) => (
-                    <div key={h.horse}>
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          marginBottom: 6,
-                          fontSize: 14,
-                        }}
-                      >
-                        <span>
-                          {index + 1}. Horse {h.horse}
-                        </span>
-                        <span>{h.final}</span>
-                      </div>
-
-                      <div
-                        style={{
-                          height: 14,
-                          background: "#262626",
-                          borderRadius: 999,
-                          overflow: "hidden",
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: `${Math.min(100, h.final * 6)}%`,
-                            height: "100%",
-                            background: "#f5f5f5",
-                            transition: "width 1s ease",
-                          }}
-                        />
-                      </div>
-                    </div>
-                  ))}
+          <div style={{ border: "1px solid #ddd", borderRadius: 24, background: "#fff", padding: 20 }}>
+            <div style={{ fontSize: 20, marginBottom: 16 }}>ログ</div>
+            <div style={{ display: "grid", gap: 8, maxHeight: 360, overflow: "auto" }}>
+              {(room?.result_payload?.logs || []).map((log, i) => (
+                <div key={i} style={{ border: "1px solid #f0f0f0", borderRadius: 14, padding: 12, background: "#fafafa" }}>
+                  {log}
                 </div>
-              </div>
-            )}
-          </section>
-
-          <aside
-            style={{
-              border: "1px solid #262626",
-              borderRadius: 18,
-              padding: 18,
-              background: "#080808",
-            }}
-          >
-            <div style={{ marginBottom: 14, fontSize: 20 }}>Control</div>
-
-            {phase === "assign" && (
-              <>
-                <div
-                  style={{
-                    padding: 14,
-                    borderRadius: 14,
-                    border: "1px solid #232323",
-                    background: "#111",
-                    color: "#cfcfcf",
-                    lineHeight: 1.7,
-                    fontSize: 14,
-                  }}
-                >
-                  個室で付与が終わった想定で、中央画面を bet フェーズへ進める。
-                </div>
-
-                <button
-                  onClick={goToBet}
-                  style={{
-                    marginTop: 14,
-                    width: "100%",
-                    padding: 12,
-                    borderRadius: 12,
-                    border: "1px solid #404040",
-                    background: "#fafafa",
-                    color: "#111",
-                    cursor: "pointer",
-                  }}
-                >
-                  BET フェーズへ
-                </button>
-              </>
-            )}
-
-            {phase === "bet" && (
-              <>
-                <div style={{ display: "grid", gap: 10 }}>
-                  {PLAYERS.map((p) => (
-                    <button
-                      key={p}
-                      onClick={() => toggleReady(p)}
-                      style={{
-                        width: "100%",
-                        padding: 12,
-                        borderRadius: 12,
-                        border: "1px solid #404040",
-                        background: readyMap[p] ? "#f5f5f5" : "#171717",
-                        color: readyMap[p] ? "#111" : "#fafafa",
-                        cursor: "pointer",
-                        textAlign: "left",
-                      }}
-                    >
-                      {p} {readyMap[p] ? "READY" : "WAITING"}
-                    </button>
-                  ))}
-                </div>
-
-                <button
-                  onClick={runRace}
-                  disabled={!allReady}
-                  style={{
-                    marginTop: 14,
-                    width: "100%",
-                    padding: 12,
-                    borderRadius: 12,
-                    border: "1px solid #404040",
-                    background: allReady ? "#fafafa" : "#222",
-                    color: allReady ? "#111" : "#666",
-                    cursor: allReady ? "pointer" : "not-allowed",
-                  }}
-                >
-                  レース開始
-                </button>
-              </>
-            )}
-
-            {phase === "result" && (
-              <>
-                <div
-                  style={{
-                    padding: 14,
-                    borderRadius: 14,
-                    border: "1px solid #232323",
-                    background: "#111",
-                    color: "#cfcfcf",
-                    lineHeight: 1.7,
-                    fontSize: 14,
-                  }}
-                >
-                  レース終了。結果を確認して次のラウンドへ進める。
-                </div>
-
-                <button
-                  onClick={resetHost}
-                  style={{
-                    marginTop: 14,
-                    width: "100%",
-                    padding: 12,
-                    borderRadius: 12,
-                    border: "1px solid #404040",
-                    background: "#fafafa",
-                    color: "#111",
-                    cursor: "pointer",
-                  }}
-                >
-                  リセット
-                </button>
-              </>
-            )}
-
-            <div
-              style={{
-                marginTop: 18,
-                padding: 14,
-                borderRadius: 14,
-                border: "1px solid #232323",
-                background: "#111",
-              }}
-            >
-              <div style={{ marginBottom: 10, fontSize: 15 }}>Player Rooms</div>
-              <div style={{ color: "#bdbdbd", lineHeight: 1.8, fontSize: 14 }}>
-                <div>/derby/player/p1</div>
-                <div>/derby/player/p2</div>
-                <div>/derby/player/p3</div>
-              </div>
+              ))}
+              {!room?.result_payload?.logs?.length && <div style={{ color: "#888" }}>ログはまだありません。</div>}
             </div>
-
-            {phase === "result" && result && (
-              <div
-                style={{
-                  marginTop: 18,
-                  padding: 14,
-                  borderRadius: 14,
-                  border: "1px solid #232323",
-                  background: "#111",
-                }}
-              >
-                <div style={{ marginBottom: 10, fontSize: 15 }}>Log</div>
-                <div style={{ display: "grid", gap: 8 }}>
-                  {result.logs.map((log, index) => (
-                    <div
-                      key={index}
-                      style={{
-                        padding: 10,
-                        borderRadius: 10,
-                        border: "1px solid #262626",
-                        background: "#0b0b0b",
-                        color: "#d4d4d4",
-                        fontSize: 13,
-                      }}
-                    >
-                      {log}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </aside>
-        </div>
+          </div>
+        </section>
       </div>
     </main>
   );
