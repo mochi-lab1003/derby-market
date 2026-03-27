@@ -6,25 +6,24 @@ import {
   ROOM_ID,
   DECK,
   HORSE_DEFS,
-  getHandSize,
   getPlayers,
   getTrifectaOdds,
   getWinOdds,
-  shuffle,
 } from "@/lib/derbyConfig";
 import { simulateDerbyRace } from "@/lib/derbyRace";
 
-function ButtonCard({ active, onClick, children }) {
+function SelectCard({ active, onClick, children, disabled = false }) {
   return (
     <button
       onClick={onClick}
+      disabled={disabled}
       style={{
         padding: 16,
         borderRadius: 16,
         border: "1px solid #ddd",
-        background: active ? "#111" : "#fff",
-        color: active ? "#fff" : "#111",
-        cursor: "pointer",
+        background: disabled ? "#f2f2f2" : active ? "#111" : "#fff",
+        color: disabled ? "#999" : active ? "#fff" : "#111",
+        cursor: disabled ? "not-allowed" : "pointer",
         textAlign: "left",
       }}
     >
@@ -36,9 +35,8 @@ function ButtonCard({ active, onClick, children }) {
 export default function DerbyPanelPage() {
   const [room, setRoom] = useState(null);
   const [horses, setHorses] = useState([]);
-  const [hands, setHands] = useState([]);
-  const [bets, setBets] = useState([]);
   const [attachments, setAttachments] = useState([]);
+  const [bets, setBets] = useState([]);
 
   const [selectedPlayer, setSelectedPlayer] = useState(null);
 
@@ -50,6 +48,7 @@ export default function DerbyPanelPage() {
   const [triFirst, setTriFirst] = useState(null);
   const [triSecond, setTriSecond] = useState(null);
   const [triThird, setTriThird] = useState(null);
+  const [stake, setStake] = useState("1");
 
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -71,9 +70,8 @@ export default function DerbyPanelPage() {
 
     const [
       { data: horseData, error: horseError },
-      { data: handData, error: handError },
-      { data: betData, error: betError },
       { data: attachmentData, error: attachmentError },
+      { data: betData, error: betError },
     ] = await Promise.all([
       supabase
         .from("derby_horses")
@@ -81,33 +79,26 @@ export default function DerbyPanelPage() {
         .eq("room_id", ROOM_ID)
         .order("horse_id", { ascending: true }),
       supabase
-        .from("derby_hands")
+        .from("derby_attachments")
         .select("*")
         .eq("room_id", ROOM_ID)
         .eq("race_number", raceNumber)
-        .order("sort_order", { ascending: true }),
+        .order("id", { ascending: true }),
       supabase
         .from("derby_bets")
-        .select("*")
-        .eq("room_id", ROOM_ID)
-        .eq("race_number", raceNumber),
-      supabase
-        .from("derby_attachments")
         .select("*")
         .eq("room_id", ROOM_ID)
         .eq("race_number", raceNumber),
     ]);
 
     if (horseError) console.error("load horses error", horseError);
-    if (handError) console.error("load hands error", handError);
-    if (betError) console.error("load bets error", betError);
     if (attachmentError) console.error("load attachments error", attachmentError);
+    if (betError) console.error("load bets error", betError);
 
     setRoom(roomData || null);
     setHorses(horseData || []);
-    setHands(handData || []);
-    setBets(betData || []);
     setAttachments(attachmentData || []);
+    setBets(betData || []);
   }
 
   useEffect(() => {
@@ -120,26 +111,45 @@ export default function DerbyPanelPage() {
   const raceNumber = room?.race_number ?? 1;
   const players = getPlayers(playerCount);
 
-  const selectedHand = useMemo(() => {
+  const allCards = DECK;
+
+  const cardsUsedBySelectedPlayer = useMemo(() => {
+    if (!selectedPlayer) return new Set();
+    return new Set(
+      attachments
+        .filter((a) => a.player_id === selectedPlayer)
+        .map((a) => a.card_id)
+    );
+  }, [attachments, selectedPlayer]);
+
+  const selectedPlayerVisibleCards = useMemo(() => {
     if (!selectedPlayer) return [];
-    return hands.filter((h) => h.player_id === selectedPlayer && !h.used);
-  }, [hands, selectedPlayer]);
+    return allCards.map((card) => {
+      const usedByMe = cardsUsedBySelectedPlayer.has(card.id);
+      const myAttachment = attachments.find(
+        (a) => a.player_id === selectedPlayer && a.card_id === card.id
+      );
+      return {
+        ...card,
+        usedByMe,
+        myAttachment,
+      };
+    });
+  }, [selectedPlayer, allCards, cardsUsedBySelectedPlayer, attachments]);
 
-  const selectedCard = selectedHand.find((c) => c.card_id === selectedCardId) || null;
+  const selectedCard = selectedPlayerVisibleCards.find(
+    (c) => c.id === selectedCardId
+  );
 
-  const remainingAttachCount = hands.filter((h) => !h.used).length;
   const confirmedBetPlayers = bets.map((b) => b.player_id);
-  const allBetsConfirmed = players.every((p) => confirmedBetPlayers.includes(p));
+  const allBetsConfirmed = players.every((p) =>
+    confirmedBetPlayers.includes(p)
+  );
 
-  const currentSummary = useMemo(() => {
+  const currentOdds = useMemo(() => {
     if (betType === "win" && winHorse) {
       const horse = horses.find((h) => h.horse_id === winHorse);
-      if (!horse) return null;
-      return {
-        cost: 1,
-        odds: horse.win_odds,
-        back: horse.win_odds,
-      };
+      return horse?.win_odds ?? null;
     }
 
     if (betType === "trifecta" && triFirst && triSecond && triThird) {
@@ -149,54 +159,18 @@ export default function DerbyPanelPage() {
       if (!h1 || !h2 || !h3) return null;
 
       const sum = h1.win_odds + h2.win_odds + h3.win_odds;
-      const odds = getTrifectaOdds(sum);
-
-      return {
-        cost: 2,
-        odds,
-        back: odds * 2,
-      };
+      return getTrifectaOdds(sum);
     }
 
     return null;
   }, [betType, winHorse, triFirst, triSecond, triThird, horses]);
 
-  async function dealHands(roomId, raceNo, count) {
-    const handSize = getHandSize(count);
-    const playersForDeal = getPlayers(count);
-    const deck = shuffle(DECK);
-    const usedCount = handSize * playersForDeal.length;
-    const picked = deck.slice(0, usedCount);
+  const stakeValue = Math.max(1, Number(stake || 1));
 
-    const rows = [];
-    playersForDeal.forEach((playerId, playerIndex) => {
-      for (let i = 0; i < handSize; i += 1) {
-        const card = picked[playerIndex * handSize + i];
-        rows.push({
-          room_id: roomId,
-          race_number: raceNo,
-          player_id: playerId,
-          card_id: card.id,
-          card_name: card.cardName,
-          stat_kind: card.statKind,
-          stat_value: card.statValue,
-          is_trait: card.isTrait,
-          used: false,
-          sort_order: i,
-        });
-      }
-    });
-
-    console.log("dealHands rows", rows);
-
-    if (rows.length) {
-      const { error } = await supabase.from("derby_hands").insert(rows);
-      if (error) {
-        console.error("dealHands insert error", error);
-        throw error;
-      }
-    }
-  }
+  const currentBack = useMemo(() => {
+    if (!currentOdds) return null;
+    return currentOdds * stakeValue;
+  }, [currentOdds, stakeValue]);
 
   async function initializeRoom(count) {
     setBusy(true);
@@ -214,20 +188,13 @@ export default function DerbyPanelPage() {
         updated_at: new Date().toISOString(),
       });
 
-      if (roomRes.error) {
-        console.error("derby_rooms upsert error", roomRes.error);
-        throw roomRes.error;
-      }
+      if (roomRes.error) throw roomRes.error;
 
       const deleteHorsesRes = await supabase
         .from("derby_horses")
         .delete()
         .eq("room_id", ROOM_ID);
-
-      if (deleteHorsesRes.error) {
-        console.error("derby_horses delete error", deleteHorsesRes.error);
-        throw deleteHorsesRes.error;
-      }
+      if (deleteHorsesRes.error) throw deleteHorsesRes.error;
 
       const horseInsertRes = await supabase.from("derby_horses").insert(
         HORSE_DEFS.map((horse) => ({
@@ -240,44 +207,19 @@ export default function DerbyPanelPage() {
           win_odds: getWinOdds(0),
         }))
       );
-
-      if (horseInsertRes.error) {
-        console.error("derby_horses insert error", horseInsertRes.error);
-        throw horseInsertRes.error;
-      }
-
-      const deleteHandsRes = await supabase
-        .from("derby_hands")
-        .delete()
-        .eq("room_id", ROOM_ID);
-
-      if (deleteHandsRes.error) {
-        console.error("derby_hands delete error", deleteHandsRes.error);
-        throw deleteHandsRes.error;
-      }
+      if (horseInsertRes.error) throw horseInsertRes.error;
 
       const deleteAttachmentsRes = await supabase
         .from("derby_attachments")
         .delete()
         .eq("room_id", ROOM_ID);
-
-      if (deleteAttachmentsRes.error) {
-        console.error("derby_attachments delete error", deleteAttachmentsRes.error);
-        throw deleteAttachmentsRes.error;
-      }
+      if (deleteAttachmentsRes.error) throw deleteAttachmentsRes.error;
 
       const deleteBetsRes = await supabase
         .from("derby_bets")
         .delete()
         .eq("room_id", ROOM_ID);
-
-      if (deleteBetsRes.error) {
-        console.error("derby_bets delete error", deleteBetsRes.error);
-        throw deleteBetsRes.error;
-      }
-
-      await dealHands(ROOM_ID, 1, playerCountValue);
-      await load();
+      if (deleteBetsRes.error) throw deleteBetsRes.error;
 
       setSelectedPlayer(null);
       setSelectedCardId(null);
@@ -287,7 +229,9 @@ export default function DerbyPanelPage() {
       setTriFirst(null);
       setTriSecond(null);
       setTriThird(null);
+      setStake("1");
 
+      await load();
       setMessage("部屋を初期化した。");
     } catch (error) {
       console.error("initializeRoom error", error);
@@ -299,6 +243,8 @@ export default function DerbyPanelPage() {
 
   async function confirmAttach() {
     if (!selectedPlayer || !selectedCard || !selectedAttachHorse || busy) return;
+    if (selectedCard.usedByMe) return;
+
     setBusy(true);
     setMessage("");
 
@@ -311,49 +257,32 @@ export default function DerbyPanelPage() {
         race_number: raceNumber,
         player_id: selectedPlayer,
         horse_id: selectedAttachHorse,
-        card_id: selectedCard.card_id,
-        card_name: selectedCard.card_name,
-        stat_kind: selectedCard.stat_kind,
-        stat_value: selectedCard.stat_value,
-        is_trait: selectedCard.is_trait,
+        card_id: selectedCard.id,
+        card_name: selectedCard.cardName,
+        stat_kind: selectedCard.statKind,
+        stat_value: selectedCard.statValue,
+        is_trait: selectedCard.isTrait,
         revealed: false,
       });
 
-      if (insertAttachmentRes.error) {
-        console.error("insert attachment error", insertAttachmentRes.error);
-        throw insertAttachmentRes.error;
-      }
-
-      const updateHandRes = await supabase
-        .from("derby_hands")
-        .update({ used: true })
-        .eq("room_id", ROOM_ID)
-        .eq("race_number", raceNumber)
-        .eq("player_id", selectedPlayer)
-        .eq("card_id", selectedCard.card_id);
-
-      if (updateHandRes.error) {
-        console.error("update hand error", updateHandRes.error);
-        throw updateHandRes.error;
-      }
+      if (insertAttachmentRes.error) throw insertAttachmentRes.error;
 
       const updateHorseRes = await supabase
         .from("derby_horses")
         .update({
           attached_count: nextCount,
-          has_trait: (horse?.has_trait || false) || selectedCard.is_trait,
+          has_trait: (horse?.has_trait || false) || selectedCard.isTrait,
           win_odds: getWinOdds(nextCount),
         })
         .eq("room_id", ROOM_ID)
         .eq("horse_id", selectedAttachHorse);
 
-      if (updateHorseRes.error) {
-        console.error("update horse error", updateHorseRes.error);
-        throw updateHorseRes.error;
-      }
+      if (updateHorseRes.error) throw updateHorseRes.error;
 
-      const unusedCountAfter = hands.filter((h) => !h.used).length - 1;
-      if (unusedCountAfter <= 0) {
+      const totalUsed = attachments.length + 1;
+      const totalCardsShouldBeUsed = DECK.length;
+
+      if (totalUsed >= totalCardsShouldBeUsed) {
         const roomUpdateRes = await supabase
           .from("derby_rooms")
           .update({
@@ -362,10 +291,7 @@ export default function DerbyPanelPage() {
           })
           .eq("room_id", ROOM_ID);
 
-        if (roomUpdateRes.error) {
-          console.error("room phase update error", roomUpdateRes.error);
-          throw roomUpdateRes.error;
-        }
+        if (roomUpdateRes.error) throw roomUpdateRes.error;
       }
 
       setSelectedCardId(null);
@@ -381,7 +307,8 @@ export default function DerbyPanelPage() {
   }
 
   async function confirmBet() {
-    if (!selectedPlayer || !betType || !currentSummary || busy) return;
+    if (!selectedPlayer || !betType || !currentOdds || !currentBack || busy) return;
+
     setBusy(true);
     setMessage("");
 
@@ -395,28 +322,26 @@ export default function DerbyPanelPage() {
           horse_1: betType === "win" ? winHorse : triFirst,
           horse_2: betType === "trifecta" ? triSecond : null,
           horse_3: betType === "trifecta" ? triThird : null,
-          cost: currentSummary.cost,
-          odds: currentSummary.odds,
-          back: currentSummary.back,
+          cost: stakeValue,
+          odds: currentOdds,
+          back: currentBack,
           is_confirmed: true,
         },
         { onConflict: "room_id,race_number,player_id" }
       );
 
-      if (error) {
-        console.error("confirmBet error", error);
-        throw error;
-      }
+      if (error) throw error;
 
       setBetType(null);
       setWinHorse(null);
       setTriFirst(null);
       setTriSecond(null);
       setTriThird(null);
+      setStake("1");
       setSelectedPlayer(null);
 
       await load();
-      setMessage("買い目を確定した。チップを支払ってください。");
+      setMessage("買い目を確定した。入力したチップ数を支払ってください。");
     } catch (error) {
       console.error("confirmBet error", error);
       setMessage(`賭け失敗: ${error.message || JSON.stringify(error)}`);
@@ -443,10 +368,7 @@ export default function DerbyPanelPage() {
           .eq("room_id", ROOM_ID)
           .eq("horse_id", row.horse_id);
 
-        if (error) {
-          console.error("runRace horse update error", error);
-          throw error;
-        }
+        if (error) throw error;
       }
 
       const roomUpdateRes = await supabase
@@ -458,10 +380,7 @@ export default function DerbyPanelPage() {
         })
         .eq("room_id", ROOM_ID);
 
-      if (roomUpdateRes.error) {
-        console.error("runRace room update error", roomUpdateRes.error);
-        throw roomUpdateRes.error;
-      }
+      if (roomUpdateRes.error) throw roomUpdateRes.error;
 
       await load();
       setMessage("レースを開始した。");
@@ -480,13 +399,6 @@ export default function DerbyPanelPage() {
 
     try {
       const nextRaceNumber = room.race_number + 1;
-
-      const delHands = await supabase
-        .from("derby_hands")
-        .delete()
-        .eq("room_id", ROOM_ID)
-        .eq("race_number", room.race_number);
-      if (delHands.error) throw delHands.error;
 
       const delAttachments = await supabase
         .from("derby_attachments")
@@ -514,8 +426,6 @@ export default function DerbyPanelPage() {
         .eq("room_id", ROOM_ID);
       if (resetHorses.error) throw resetHorses.error;
 
-      await dealHands(ROOM_ID, nextRaceNumber, room.player_count);
-
       const roomUpdate = await supabase
         .from("derby_rooms")
         .update({
@@ -535,6 +445,7 @@ export default function DerbyPanelPage() {
       setTriFirst(null);
       setTriSecond(null);
       setTriThird(null);
+      setStake("1");
 
       await load();
       setMessage("次レースを準備した。");
@@ -555,7 +466,7 @@ export default function DerbyPanelPage() {
       <div style={{ maxWidth: 1280, margin: "0 auto", display: "grid", gap: 24 }}>
         <div>
           <h1 style={{ fontSize: 34, marginBottom: 8 }}>DERBY MARKET / PANEL</h1>
-          <div style={{ color: "#666" }}>共用操作端末 / ボタン式のみ</div>
+          <div style={{ color: "#666" }}>共用操作端末 / attachは本人だけ使用済み可視</div>
         </div>
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -628,29 +539,29 @@ export default function DerbyPanelPage() {
                   }}
                 >
                   {players.map((player) => (
-                    <ButtonCard
+                    <SelectCard
                       key={player}
                       active={selectedPlayer === player}
                       onClick={() => setSelectedPlayer(player)}
                     >
                       <div style={{ fontWeight: 700 }}>{player}</div>
-                      <div
-                        style={{
-                          fontSize: 13,
-                          color: selectedPlayer === player ? "#ddd" : "#666",
-                          marginTop: 4,
-                        }}
-                      >
+                      <div style={{ fontSize: 13, color: selectedPlayer === player ? "#ddd" : "#666", marginTop: 4 }}>
                         {bets.some((b) => b.player_id === player) ? "賭け済み" : "未入力"}
                       </div>
-                    </ButtonCard>
+                    </SelectCard>
                   ))}
                 </div>
 
                 {attachEnabled && (
                   <div style={{ display: "grid", gap: 18 }}>
                     <div>
-                      <div style={{ marginBottom: 10, color: "#666" }}>手札</div>
+                      <div style={{ marginBottom: 10, color: "#666" }}>カード一覧</div>
+                      {!selectedPlayer && (
+                        <div style={{ color: "#888", marginBottom: 12 }}>
+                          まずプレイヤーを選択してください。
+                        </div>
+                      )}
+
                       <div
                         style={{
                           display: "grid",
@@ -658,27 +569,36 @@ export default function DerbyPanelPage() {
                           gap: 12,
                         }}
                       >
-                        {selectedHand.map((card) => (
-                          <ButtonCard
-                            key={card.card_id}
-                            active={selectedCardId === card.card_id}
-                            onClick={() => setSelectedCardId(card.card_id)}
+                        {selectedPlayerVisibleCards.map((card) => (
+                          <SelectCard
+                            key={card.id}
+                            active={selectedCardId === card.id}
+                            onClick={() => setSelectedCardId(card.id)}
+                            disabled={card.usedByMe}
                           >
-                            <div style={{ fontWeight: 700 }}>{card.card_name}</div>
+                            <div style={{ fontWeight: 700 }}>{card.cardName}</div>
                             <div
                               style={{
                                 fontSize: 13,
-                                color: selectedCardId === card.card_id ? "#ddd" : "#666",
+                                color: card.usedByMe
+                                  ? "#999"
+                                  : selectedCardId === card.id
+                                  ? "#ddd"
+                                  : "#666",
                                 marginTop: 4,
                               }}
                             >
-                              {card.is_trait
+                              {card.isTrait
                                 ? "Trait"
-                                : `${card.stat_kind} ${card.stat_value > 0 ? "+" : ""}${card.stat_value}`}
+                                : `${card.statKind} ${card.statValue > 0 ? "+" : ""}${card.statValue}`}
                             </div>
-                          </ButtonCard>
+                            {card.usedByMe && (
+                              <div style={{ fontSize: 12, marginTop: 8 }}>
+                                USED → Horse {card.myAttachment?.horse_id}
+                              </div>
+                            )}
+                          </SelectCard>
                         ))}
-                        {!selectedPlayer && <div style={{ color: "#888" }}>プレイヤーを選択してください。</div>}
                       </div>
                     </div>
 
@@ -692,7 +612,7 @@ export default function DerbyPanelPage() {
                         }}
                       >
                         {horses.map((horse) => (
-                          <ButtonCard
+                          <SelectCard
                             key={horse.horse_id}
                             active={selectedAttachHorse === horse.horse_id}
                             onClick={() => setSelectedAttachHorse(horse.horse_id)}
@@ -707,7 +627,7 @@ export default function DerbyPanelPage() {
                             >
                               枚数 {horse.attached_count} / x{horse.win_odds}
                             </div>
-                          </ButtonCard>
+                          </SelectCard>
                         ))}
                       </div>
                     </div>
@@ -724,9 +644,7 @@ export default function DerbyPanelPage() {
                         color:
                           !selectedPlayer || !selectedCard || !selectedAttachHorse || busy ? "#999" : "#fff",
                         cursor:
-                          !selectedPlayer || !selectedCard || !selectedAttachHorse || busy
-                            ? "not-allowed"
-                            : "pointer",
+                          !selectedPlayer || !selectedCard || !selectedAttachHorse || busy ? "not-allowed" : "pointer",
                       }}
                     >
                       付与を確定
@@ -737,25 +655,13 @@ export default function DerbyPanelPage() {
                 {betEnabled && (
                   <div style={{ display: "grid", gap: 18 }}>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                      <ButtonCard active={betType === "win"} onClick={() => setBetType("win")}>
+                      <SelectCard active={betType === "win"} onClick={() => setBetType("win")}>
                         <div style={{ fontWeight: 700 }}>単勝</div>
-                        <div style={{ fontSize: 13, color: betType === "win" ? "#ddd" : "#666", marginTop: 4 }}>
-                          コスト 1
-                        </div>
-                      </ButtonCard>
+                      </SelectCard>
 
-                      <ButtonCard active={betType === "trifecta"} onClick={() => setBetType("trifecta")}>
+                      <SelectCard active={betType === "trifecta"} onClick={() => setBetType("trifecta")}>
                         <div style={{ fontWeight: 700 }}>3連単</div>
-                        <div
-                          style={{
-                            fontSize: 13,
-                            color: betType === "trifecta" ? "#ddd" : "#666",
-                            marginTop: 4,
-                          }}
-                        >
-                          コスト 2
-                        </div>
-                      </ButtonCard>
+                      </SelectCard>
                     </div>
 
                     {betType === "win" && (
@@ -767,7 +673,7 @@ export default function DerbyPanelPage() {
                         }}
                       >
                         {horses.map((horse) => (
-                          <ButtonCard
+                          <SelectCard
                             key={horse.horse_id}
                             active={winHorse === horse.horse_id}
                             onClick={() => setWinHorse(horse.horse_id)}
@@ -776,7 +682,7 @@ export default function DerbyPanelPage() {
                             <div style={{ fontSize: 13, color: winHorse === horse.horse_id ? "#ddd" : "#666", marginTop: 4 }}>
                               単勝 x{horse.win_odds}
                             </div>
-                          </ButtonCard>
+                          </SelectCard>
                         ))}
                       </div>
                     )}
@@ -865,16 +771,40 @@ export default function DerbyPanelPage() {
                       </div>
                     )}
 
+                    <div>
+                      <div style={{ marginBottom: 8, color: "#666" }}>賭けるチップ数</div>
+                      <input
+                        type="number"
+                        min="1"
+                        value={stake}
+                        onChange={(e) => setStake(e.target.value)}
+                        style={{
+                          width: 180,
+                          padding: "12px 14px",
+                          borderRadius: 12,
+                          border: "1px solid #ddd",
+                          fontSize: 16,
+                          background: "#fff",
+                          color: "#111",
+                        }}
+                      />
+                    </div>
+
                     <button
                       onClick={confirmBet}
-                      disabled={!selectedPlayer || !betType || !currentSummary || busy}
+                      disabled={!selectedPlayer || !betType || !currentOdds || !stakeValue || busy}
                       style={{
                         padding: "12px 16px",
                         borderRadius: 12,
                         border: "1px solid #111",
-                        background: !selectedPlayer || !betType || !currentSummary || busy ? "#eee" : "#111",
-                        color: !selectedPlayer || !betType || !currentSummary || busy ? "#999" : "#fff",
-                        cursor: !selectedPlayer || !betType || !currentSummary || busy ? "not-allowed" : "pointer",
+                        background:
+                          !selectedPlayer || !betType || !currentOdds || !stakeValue || busy ? "#eee" : "#111",
+                        color:
+                          !selectedPlayer || !betType || !currentOdds || !stakeValue || busy ? "#999" : "#fff",
+                        cursor:
+                          !selectedPlayer || !betType || !currentOdds || !stakeValue || busy
+                            ? "not-allowed"
+                            : "pointer",
                       }}
                     >
                       買い目を確定
@@ -882,7 +812,9 @@ export default function DerbyPanelPage() {
                   </div>
                 )}
 
-                {raceEnabled && <div style={{ color: "#666" }}>中央画面でレースを確認してください。</div>}
+                {raceEnabled && (
+                  <div style={{ color: "#666" }}>中央画面でレースを確認してください。</div>
+                )}
               </>
             )}
           </section>
@@ -911,21 +843,23 @@ export default function DerbyPanelPage() {
                   ? `${triFirst || "-"} → ${triSecond || "-"} → ${triThird || "-"}`
                   : "-"}
               </div>
-              <div>コスト: {currentSummary?.cost ?? "-"}</div>
-              <div>オッズ: {currentSummary ? `x${currentSummary.odds}` : "-"}</div>
-              <div>バック: {currentSummary?.back ?? "-"}</div>
+              <div>チップ数: {stakeValue || "-"}</div>
+              <div>オッズ: {currentOdds ? `x${currentOdds}` : "-"}</div>
+              <div>バック: {currentBack ?? "-"}</div>
             </div>
 
-            <div style={{ marginTop: 12, fontSize: 13, color: "#666" }}>
-              <div>phase: {String(room?.phase)}</div>
-              <div>selectedPlayer: {String(selectedPlayer)}</div>
-              <div>selectedCardId: {String(selectedCardId)}</div>
-              <div>selectedAttachHorse: {String(selectedAttachHorse)}</div>
-              <div>selectedHandCount: {selectedHand.length}</div>
-              <div>handsCount: {hands.length}</div>
-              <div>horsesCount: {horses.length}</div>
-              <div>betsCount: {bets.length}</div>
-              <div>attachmentsCount: {attachments.length}</div>
+            <div style={{ display: "grid", gap: 8 }}>
+              {players.map((player) => {
+                const bet = bets.find((b) => b.player_id === player);
+                return (
+                  <div key={player} style={{ border: "1px solid #f0f0f0", borderRadius: 14, padding: 12 }}>
+                    <div style={{ fontWeight: 700 }}>{player}</div>
+                    <div style={{ fontSize: 13, color: "#666", marginTop: 4 }}>
+                      {bet ? `${bet.bet_type === "win" ? "単勝" : "3連単"} / ${bet.cost}枚 / 確定済み` : "未確定"}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             {betEnabled && (
@@ -938,23 +872,9 @@ export default function DerbyPanelPage() {
                   lineHeight: 1.6,
                 }}
               >
-                買い目確定後、表示されたコスト分のチップを支払ってください。
+                買い目確定後、入力したチップ数を支払ってください。
               </div>
             )}
-
-            <div style={{ display: "grid", gap: 8 }}>
-              {players.map((player) => {
-                const bet = bets.find((b) => b.player_id === player);
-                return (
-                  <div key={player} style={{ border: "1px solid #f0f0f0", borderRadius: 14, padding: 12 }}>
-                    <div style={{ fontWeight: 700 }}>{player}</div>
-                    <div style={{ fontSize: 13, color: "#666", marginTop: 4 }}>
-                      {bet ? `${bet.bet_type === "win" ? "単勝" : "3連単"} / 確定済み` : "未確定"}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
 
             {betEnabled && (
               <button
