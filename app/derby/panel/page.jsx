@@ -307,48 +307,54 @@ export default function DerbyPanelPage() {
   }
 
   async function confirmBet() {
-    if (!selectedPlayer || !betType || !currentOdds || !currentBack || busy) return;
+  if (!selectedPlayer || !betType || !currentOdds || !currentBack || busy) return;
 
-    setBusy(true);
-    setMessage("");
+  setBusy(true);
+  setMessage("");
 
-    try {
-      const { error } = await supabase.from("derby_bets").upsert(
-        {
-          room_id: ROOM_ID,
-          race_number: raceNumber,
-          player_id: selectedPlayer,
-          bet_type: betType,
-          horse_1: betType === "win" ? winHorse : triFirst,
-          horse_2: betType === "trifecta" ? triSecond : null,
-          horse_3: betType === "trifecta" ? triThird : null,
-          cost: stakeValue,
-          odds: currentOdds,
-          back: currentBack,
-          is_confirmed: true,
-        },
-        { onConflict: "room_id,race_number,player_id" }
-      );
+  try {
+    const delRes = await supabase
+      .from("derby_bets")
+      .delete()
+      .eq("room_id", ROOM_ID)
+      .eq("race_number", raceNumber)
+      .eq("player_id", selectedPlayer);
 
-      if (error) throw error;
+    if (delRes.error) throw delRes.error;
 
-      setBetType(null);
-      setWinHorse(null);
-      setTriFirst(null);
-      setTriSecond(null);
-      setTriThird(null);
-      setStake("1");
-      setSelectedPlayer(null);
+    const insertRes = await supabase.from("derby_bets").insert({
+      room_id: ROOM_ID,
+      race_number: raceNumber,
+      player_id: selectedPlayer,
+      bet_type: betType,
+      horse_1: betType === "win" ? winHorse : triFirst,
+      horse_2: betType === "trifecta" ? triSecond : null,
+      horse_3: betType === "trifecta" ? triThird : null,
+      cost: stakeValue,
+      odds: currentOdds,
+      back: currentBack,
+      is_confirmed: true,
+    });
 
-      await load();
-      setMessage("買い目を確定した。入力したチップ数を支払ってください。");
-    } catch (error) {
-      console.error("confirmBet error", error);
-      setMessage(`賭け失敗: ${error.message || JSON.stringify(error)}`);
-    } finally {
-      setBusy(false);
-    }
+    if (insertRes.error) throw insertRes.error;
+
+    setBetType(null);
+    setWinHorse(null);
+    setTriFirst(null);
+    setTriSecond(null);
+    setTriThird(null);
+    setStake("1");
+    setSelectedPlayer(null);
+
+    await load();
+    setMessage("買い目を確定した。入力したチップ数を支払ってください。");
+  } catch (error) {
+    console.error("confirmBet error", error);
+    setMessage(`賭け失敗: ${error.message || JSON.stringify(error)}`);
+  } finally {
+    setBusy(false);
   }
+}
 
   async function runRace() {
     if (busy || !allBetsConfirmed) return;
