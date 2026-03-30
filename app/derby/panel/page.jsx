@@ -75,6 +75,14 @@ export default function DerbyPanelPage() {
   const [triThird, setTriThird] = useState(null);
   const [stake, setStake] = useState("1");
 
+  const [horseNames, setHorseNames] = useState({
+    "01": "",
+    "02": "",
+    "03": "",
+    "04": "",
+    "05": "",
+  });
+
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -107,8 +115,7 @@ export default function DerbyPanelPage() {
         .from("derby_attachments")
         .select("*")
         .eq("room_id", ROOM_ID)
-        .eq("race_number", raceNumber)
-        .order("id", { ascending: true }),
+        .eq("race_number", raceNumber),
       supabase
         .from("derby_bets")
         .select("*")
@@ -120,10 +127,19 @@ export default function DerbyPanelPage() {
     if (attachmentError) console.error("load attachments error", attachmentError);
     if (betError) console.error("load bets error", betError);
 
+    const horseRows = horseData || [];
     setRoom(roomData || null);
-    setHorses(horseData || []);
+    setHorses(horseRows);
     setAttachments(attachmentData || []);
     setBets(betData || []);
+
+    if (horseRows.length) {
+      setHorseNames(
+        Object.fromEntries(
+          horseRows.map((h) => [h.horse_id, h.display_name || ""])
+        )
+      );
+    }
   }
 
   useEffect(() => {
@@ -235,7 +251,8 @@ export default function DerbyPanelPage() {
         HORSE_DEFS.map((horse) => ({
           room_id: ROOM_ID,
           horse_id: horse.id,
-          display_name: horse.defaultName,
+          display_name:
+            horseNames[horse.id]?.trim() || horse.defaultName,
           flavor_label: horse.flavor,
           attached_count: 0,
           has_trait: false,
@@ -271,6 +288,37 @@ export default function DerbyPanelPage() {
     } catch (error) {
       console.error("initializeRoom error", error);
       setMessage(`初期化失敗: ${error.message || JSON.stringify(error)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveHorseNames() {
+    if (!horses.length) {
+      setMessage("先に部屋を初期化してください。");
+      return;
+    }
+
+    setBusy(true);
+    setMessage("");
+
+    try {
+      for (const horse of horses) {
+        const nextName = horseNames[horse.horse_id]?.trim() || horse.display_name;
+        const { error } = await supabase
+          .from("derby_horses")
+          .update({ display_name: nextName })
+          .eq("room_id", ROOM_ID)
+          .eq("horse_id", horse.horse_id);
+
+        if (error) throw error;
+      }
+
+      await load();
+      setMessage("馬名を保存した。");
+    } catch (error) {
+      console.error("saveHorseNames error", error);
+      setMessage(`命名保存失敗: ${error.message || JSON.stringify(error)}`);
     } finally {
       setBusy(false);
     }
@@ -545,8 +593,41 @@ export default function DerbyPanelPage() {
           </div>
         </div>
 
-        <section style={{ border: "1px solid #ddd", borderRadius: 20, background: "#fff", padding: 16 }}>
-          <div style={{ fontSize: 18, marginBottom: 12 }}>セットアップ</div>
+        <section style={{ border: "1px solid #ddd", borderRadius: 20, background: "#fff", padding: 16, display: "grid", gap: 14 }}>
+          <div style={{ fontSize: 18 }}>セットアップ / 命名</div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(5, 1fr)",
+              gap: 10,
+            }}
+          >
+            {HORSE_DEFS.map((horse) => (
+              <div key={horse.id} style={{ display: "grid", gap: 6 }}>
+                <div style={{ fontSize: 12, fontWeight: 700 }}>Horse {horse.id}</div>
+                <input
+                  value={horseNames[horse.id] || ""}
+                  onChange={(e) =>
+                    setHorseNames((prev) => ({
+                      ...prev,
+                      [horse.id]: e.target.value,
+                    }))
+                  }
+                  placeholder={horse.defaultName}
+                  style={{
+                    padding: "10px 12px",
+                    borderRadius: 12,
+                    border: "1px solid #ddd",
+                    fontSize: 14,
+                    background: "#fff",
+                    color: "#111",
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             {[2, 3, 4, 5, 6, 7].map((count) => (
               <button
@@ -562,9 +643,24 @@ export default function DerbyPanelPage() {
                   cursor: "pointer",
                 }}
               >
-                {count}人
+                {count}人で開始
               </button>
             ))}
+
+            <button
+              onClick={saveHorseNames}
+              disabled={busy || !horses.length}
+              style={{
+                padding: "10px 14px",
+                borderRadius: 12,
+                border: "1px solid #111",
+                background: busy || !horses.length ? "#eee" : "#111",
+                color: busy || !horses.length ? "#999" : "#fff",
+                cursor: busy || !horses.length ? "not-allowed" : "pointer",
+              }}
+            >
+              馬名を保存
+            </button>
 
             {(settlementEnabled || raceEnabled) && (
               <button
