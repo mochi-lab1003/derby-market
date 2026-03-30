@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { ROOM_ID } from "@/lib/derbyConfig";
 import { simulateDerbyRace } from "@/lib/derbyRace";
@@ -8,14 +8,14 @@ import { simulateDerbyRace } from "@/lib/derbyRace";
 const SEGMENTS = ["START", "EARLY", "MID", "LATE", "FINAL"];
 
 const HORSE_COLORS = {
-  "01": "#df5a5a",
-  "02": "#4b7fff",
-  "03": "#3fa45b",
-  "04": "#d7a620",
-  "05": "#8b63db",
+  "01": "#d84d4d",
+  "02": "#3972f6",
+  "03": "#33a25a",
+  "04": "#d6a114",
+  "05": "#8756de",
 };
 
-function HorseIcon({ horseId, number, size = 78 }) {
+function HorseIcon({ horseId, number, size = 76 }) {
   const color = HORSE_COLORS[horseId] || "#777";
   const h = Math.round(size * 0.62);
 
@@ -31,68 +31,38 @@ function HorseIcon({ horseId, number, size = 78 }) {
       <svg viewBox="0 0 220 130" width={size} height={h} aria-hidden="true">
         <g>
           <path
-            d="M34 78
-               C34 56, 53 43, 82 43
+            d="M34 80
+               C34 57, 53 43, 80 43
                L128 43
-               C152 43, 170 54, 177 72
-               L190 72
-               C198 72, 203 76, 203 82
-               C203 88, 198 92, 190 92
-               L178 92
-               C171 106, 156 114, 132 114
-               L78 114
-               C50 114, 34 100, 34 78 Z"
+               C154 43, 171 55, 178 73
+               L191 73
+               C199 73, 204 77, 204 83
+               C204 89, 199 93, 191 93
+               L178 93
+               C171 107, 156 115, 132 115
+               L77 115
+               C50 115, 34 101, 34 80 Z"
             fill="#fff"
-            stroke="#1a1a1a"
+            stroke="#1b1b1b"
             strokeWidth="5"
           />
           <path
-            d="M116 43
-               C116 22, 134 10, 155 10
-               C170 10, 183 16, 191 28
-               L174 34
-               C168 26, 160 22, 150 22
-               C137 22, 124 31, 124 43 Z"
+            d="M118 43
+               C118 20, 137 9, 157 9
+               C172 9, 185 16, 193 29
+               L176 35
+               C169 26, 161 22, 151 22
+               C138 22, 126 30, 126 43 Z"
             fill="#fff"
-            stroke="#1a1a1a"
+            stroke="#1b1b1b"
             strokeWidth="5"
           />
-          <path
-            d="M176 28 L197 15"
-            stroke="#1a1a1a"
-            strokeWidth="5"
-            strokeLinecap="round"
-          />
-          <path
-            d="M60 114 L55 128"
-            stroke="#1a1a1a"
-            strokeWidth="6"
-            strokeLinecap="round"
-          />
-          <path
-            d="M90 114 L84 128"
-            stroke="#1a1a1a"
-            strokeWidth="6"
-            strokeLinecap="round"
-          />
-          <path
-            d="M130 114 L124 128"
-            stroke="#1a1a1a"
-            strokeWidth="6"
-            strokeLinecap="round"
-          />
-          <path
-            d="M160 113 L166 128"
-            stroke="#1a1a1a"
-            strokeWidth="6"
-            strokeLinecap="round"
-          />
-          <path
-            d="M34 72 L18 58"
-            stroke={color}
-            strokeWidth="10"
-            strokeLinecap="round"
-          />
+          <path d="M177 28 L197 14" stroke="#1b1b1b" strokeWidth="5" strokeLinecap="round" />
+          <path d="M57 115 L51 129" stroke="#1b1b1b" strokeWidth="6" strokeLinecap="round" />
+          <path d="M88 115 L82 129" stroke="#1b1b1b" strokeWidth="6" strokeLinecap="round" />
+          <path d="M129 115 L123 129" stroke="#1b1b1b" strokeWidth="6" strokeLinecap="round" />
+          <path d="M160 114 L166 129" stroke="#1b1b1b" strokeWidth="6" strokeLinecap="round" />
+          <path d="M34 73 L18 59" stroke={color} strokeWidth="10" strokeLinecap="round" />
           <rect
             x="90"
             y="57"
@@ -101,10 +71,10 @@ function HorseIcon({ horseId, number, size = 78 }) {
             width="38"
             height="24"
             fill={color}
-            stroke="#1a1a1a"
+            stroke="#1b1b1b"
             strokeWidth="4"
           />
-          <circle cx="160" cy="34" r="4" fill="#1a1a1a" />
+          <circle cx="160" cy="34" r="4" fill="#1b1b1b" />
         </g>
       </svg>
 
@@ -167,24 +137,24 @@ function TrackLane({ horse, percent, overlay, showResult }) {
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "120px 1fr",
-        gap: 10,
+        gridTemplateColumns: "112px 1fr",
+        gap: 8,
         alignItems: "center",
       }}
     >
       <div
         style={{
-          border: "1px solid #e8e8e0",
-          borderRadius: 14,
+          border: "1px solid #ebe9df",
+          borderRadius: 12,
           background: "#fff",
-          padding: "8px 10px",
+          padding: "7px 8px",
           minWidth: 0,
         }}
       >
         <div
           style={{
             fontSize: 12,
-            fontWeight: 700,
+            fontWeight: 800,
             whiteSpace: "nowrap",
             overflow: "hidden",
             textOverflow: "ellipsis",
@@ -197,7 +167,7 @@ function TrackLane({ horse, percent, overlay, showResult }) {
       <div
         style={{
           position: "relative",
-          height: 64,
+          height: 58,
           borderRadius: 999,
           border: "1px solid #dfdfd8",
           background: "linear-gradient(to right, #fbfbf8, #f2f2ec)",
@@ -222,9 +192,11 @@ function TrackLane({ horse, percent, overlay, showResult }) {
           <div
             style={{
               position: "absolute",
-              left: 10,
-              top: 8,
+              left: 8,
+              top: 6,
               zIndex: 3,
+              maxWidth: "48%",
+              overflow: "hidden",
             }}
           >
             <LaneBadge tone="event">{overlay}</LaneBadge>
@@ -235,7 +207,7 @@ function TrackLane({ horse, percent, overlay, showResult }) {
           <div
             style={{
               position: "absolute",
-              right: 10,
+              right: 8,
               top: "50%",
               transform: "translateY(-50%)",
               zIndex: 3,
@@ -251,11 +223,10 @@ function TrackLane({ horse, percent, overlay, showResult }) {
             left: `${percent}%`,
             top: "50%",
             transform: "translate(-50%, -50%)",
-            transition: "left 160ms linear",
             zIndex: 2,
           }}
         >
-          <HorseIcon horseId={horse.horse_id} number={horse.horse_id} size={74} />
+          <HorseIcon horseId={horse.horse_id} number={horse.horse_id} size={68} />
         </div>
       </div>
     </div>
@@ -285,45 +256,112 @@ export default function DerbyHostPage() {
 
   const animationRef = useRef(null);
 
-  async function load() {
-    const { data: roomData } = await supabase
+  const load = useCallback(async () => {
+    const { data: roomData, error: roomError } = await supabase
       .from("derby_rooms")
       .select("*")
       .eq("room_id", ROOM_ID)
       .maybeSingle();
 
+    if (roomError) {
+      console.error("load room error", roomError);
+      return;
+    }
+
     const raceNumber = roomData?.race_number ?? 1;
 
-    const [{ data: horseData }, { data: attachmentData }, { data: betData }] =
-      await Promise.all([
-        supabase
-          .from("derby_horses")
-          .select("*")
-          .eq("room_id", ROOM_ID)
-          .order("horse_id", { ascending: true }),
-        supabase
-          .from("derby_attachments")
-          .select("*")
-          .eq("room_id", ROOM_ID)
-          .eq("race_number", raceNumber),
-        supabase
-          .from("derby_bets")
-          .select("*")
-          .eq("room_id", ROOM_ID)
-          .eq("race_number", raceNumber),
-      ]);
+    const [
+      { data: horseData, error: horseError },
+      { data: attachmentData, error: attachmentError },
+      { data: betData, error: betError },
+    ] = await Promise.all([
+      supabase
+        .from("derby_horses")
+        .select("*")
+        .eq("room_id", ROOM_ID)
+        .order("horse_id", { ascending: true }),
+      supabase
+        .from("derby_attachments")
+        .select("*")
+        .eq("room_id", ROOM_ID)
+        .eq("race_number", raceNumber),
+      supabase
+        .from("derby_bets")
+        .select("*")
+        .eq("room_id", ROOM_ID)
+        .eq("race_number", raceNumber),
+    ]);
+
+    if (horseError) console.error("load horses error", horseError);
+    if (attachmentError) console.error("load attachments error", attachmentError);
+    if (betError) console.error("load bets error", betError);
 
     setRoom(roomData || null);
     setHorses(horseData || []);
     setAttachments(attachmentData || []);
     setBets(betData || []);
-  }
+  }, []);
 
   useEffect(() => {
     load();
-    const id = setInterval(load, 1400);
-    return () => clearInterval(id);
-  }, []);
+
+    const channel = supabase
+      .channel(`derby-host-${ROOM_ID}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "derby_rooms",
+          filter: `room_id=eq.${ROOM_ID}`,
+        },
+        () => load()
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "derby_horses",
+          filter: `room_id=eq.${ROOM_ID}`,
+        },
+        () => load()
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "derby_attachments",
+          filter: `room_id=eq.${ROOM_ID}`,
+        },
+        () => load()
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "derby_bets",
+          filter: `room_id=eq.${ROOM_ID}`,
+        },
+        () => load()
+      )
+      .subscribe((status) => {
+        if (status === "CHANNEL_ERROR") {
+          console.error("realtime subscribe error");
+        }
+      });
+
+    const fallbackId = setInterval(() => {
+      load();
+    }, 10000);
+
+    return () => {
+      clearInterval(fallbackId);
+      supabase.removeChannel(channel);
+    };
+  }, [load]);
 
   const allBetPlayers = useMemo(() => bets.map((b) => b.player_id), [bets]);
 
@@ -340,14 +378,17 @@ export default function DerbyHostPage() {
 
   useEffect(() => {
     const nextKey =
-      room?.result_payload && room?.race_number
-        ? `${room.race_number}-${room.updated_at || ""}`
+      room?.phase === "race" && room?.result_payload
+        ? `${room.race_number}:${room.updated_at || ""}:${JSON.stringify(
+            room.result_payload.ranking || []
+          )}`
         : "";
 
     if (!nextKey) {
       setProgress(0);
       setActiveSegmentIndex(-1);
       setRunningRace(false);
+      setPlayKey("");
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
       return;
     }
@@ -387,7 +428,7 @@ export default function DerbyHostPage() {
     return () => {
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
     };
-  }, [room?.result_payload, room?.race_number, room?.updated_at, playKey]);
+  }, [room, playKey]);
 
   const interpolatedPositions = useMemo(() => {
     const base = Object.fromEntries(horses.map((h) => [h.horse_id, 3]));
@@ -478,7 +519,6 @@ export default function DerbyHostPage() {
     if (!allBetsConfirmed || runningRace || room?.phase !== "bet") return;
 
     try {
-      setRunningRace(true);
       const result = simulateDerbyRace(attachments);
 
       for (const row of result.ranking) {
@@ -487,6 +527,7 @@ export default function DerbyHostPage() {
           .update({
             final_rank: row.final_rank,
             final_distance: row.final_distance,
+            updated_at: new Date().toISOString(),
           })
           .eq("room_id", ROOM_ID)
           .eq("horse_id", row.horse_id);
@@ -504,11 +545,8 @@ export default function DerbyHostPage() {
         .eq("room_id", ROOM_ID);
 
       if (roomUpdateRes.error) throw roomUpdateRes.error;
-
-      await load();
     } catch (error) {
       console.error("runRaceFromHost error", error);
-      setRunningRace(false);
     }
   }
 
@@ -518,7 +556,7 @@ export default function DerbyHostPage() {
         minHeight: "100vh",
         background: "#fbfbf8",
         color: "#111",
-        padding: 10,
+        padding: 8,
       }}
     >
       <div
@@ -526,48 +564,44 @@ export default function DerbyHostPage() {
           maxWidth: 1280,
           margin: "0 auto",
           display: "grid",
-          gap: 10,
+          gap: 8,
         }}
       >
         <section
           style={{
             border: "1px solid #e5e5df",
-            borderRadius: 18,
+            borderRadius: 16,
             background: "#fff",
-            padding: 12,
-            display: "grid",
-            gap: 10,
+            padding: 10,
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            flexWrap: "wrap",
+            justifyContent: "space-between",
           }}
         >
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr auto auto auto auto",
-              gap: 8,
-              alignItems: "center",
-            }}
-          >
-            <div style={{ minWidth: 0 }}>
-              <div
-                style={{
-                  fontSize: 24,
-                  fontWeight: 800,
-                  lineHeight: 1.1,
-                }}
-              >
-                DERBY MARKET / TRACK VIEW
-              </div>
-              <div style={{ color: "#777", fontSize: 11, marginTop: 2 }}>
-                白い試験走路 / 観戦専用
-              </div>
+          <div style={{ minWidth: 0 }}>
+            <div
+              style={{
+                fontSize: 20,
+                fontWeight: 800,
+                lineHeight: 1.1,
+              }}
+            >
+              DERBY MARKET
             </div>
+            <div style={{ color: "#777", fontSize: 11, marginTop: 2 }}>
+              TRACK VIEW
+            </div>
+          </div>
 
-            <LaneBadge>{`ROOM ${ROOM_ID}`}</LaneBadge>
+          <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
             <LaneBadge>{`RACE ${room?.race_number || 1}`}</LaneBadge>
             <LaneBadge>
-              {activeSegmentIndex >= 0 ? SEGMENTS[activeSegmentIndex] : room?.phase || "setup"}
+              {runningRace && activeSegmentIndex >= 0
+                ? SEGMENTS[activeSegmentIndex]
+                : room?.phase || "setup"}
             </LaneBadge>
-
             <button
               onClick={runRaceFromHost}
               disabled={!allBetsConfirmed || room?.phase !== "bet" || runningRace}
@@ -594,62 +628,27 @@ export default function DerbyHostPage() {
               レース開始
             </button>
           </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(5, 1fr)",
-              gap: 8,
-            }}
-          >
-            {SEGMENTS.map((label, idx) => {
-              const active = activeSegmentIndex >= idx && runningRace;
-              return (
-                <div
-                  key={label}
-                  style={{
-                    border: "1px solid #ecece6",
-                    borderRadius: 12,
-                    padding: "8px 6px",
-                    textAlign: "center",
-                    background: active ? "#111" : "#fafaf7",
-                    color: active ? "#fff" : "#666",
-                    fontSize: 11,
-                    fontWeight: 700,
-                  }}
-                >
-                  {label}
-                </div>
-              );
-            })}
-          </div>
         </section>
 
         <section
           style={{
             border: "1px solid #e5e5df",
-            borderRadius: 18,
+            borderRadius: 16,
             background: "#fff",
-            padding: 12,
+            padding: 10,
             display: "grid",
-            gap: 10,
+            gap: 8,
           }}
         >
-          <div style={{ fontSize: 14, fontWeight: 700, color: "#333" }}>
-            CONTINUOUS TRACK
-          </div>
-
-          <div style={{ display: "grid", gap: 10 }}>
-            {displayHorses.map((horse) => (
-              <TrackLane
-                key={`${horse.horse_id}-${playKey}`}
-                horse={horse}
-                percent={interpolatedPositions[horse.horse_id] ?? 3}
-                overlay={laneOverlays[horse.horse_id]}
-                showResult={!!resultRanking.length && !runningRace}
-              />
-            ))}
-          </div>
+          {displayHorses.map((horse) => (
+            <TrackLane
+              key={`${horse.horse_id}-${playKey || "idle"}`}
+              horse={horse}
+              percent={interpolatedPositions[horse.horse_id] ?? 3}
+              overlay={laneOverlays[horse.horse_id]}
+              showResult={!!resultRanking.length && !runningRace}
+            />
+          ))}
         </section>
       </div>
     </main>

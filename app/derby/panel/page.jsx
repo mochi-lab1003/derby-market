@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import {
   ROOM_ID,
@@ -57,6 +57,14 @@ function judgeBet(bet, ranking) {
   return { hit: false, payout: 0 };
 }
 
+const EMPTY_NAMES = {
+  "01": "",
+  "02": "",
+  "03": "",
+  "04": "",
+  "05": "",
+};
+
 export default function DerbyPanelPage() {
   const [room, setRoom] = useState(null);
   const [horses, setHorses] = useState([]);
@@ -64,7 +72,6 @@ export default function DerbyPanelPage() {
   const [bets, setBets] = useState([]);
 
   const [selectedPlayer, setSelectedPlayer] = useState(null);
-
   const [selectedCardId, setSelectedCardId] = useState(null);
   const [selectedAttachHorse, setSelectedAttachHorse] = useState(null);
 
@@ -75,19 +82,32 @@ export default function DerbyPanelPage() {
   const [triThird, setTriThird] = useState(null);
   const [stake, setStake] = useState("1");
 
-  const [horseNames, setHorseNames] = useState({
-    "01": "",
-    "02": "",
-    "03": "",
-    "04": "",
-    "05": "",
-  });
+  const [horseNames, setHorseNames] = useState(EMPTY_NAMES);
   const [isEditingNames, setIsEditingNames] = useState(false);
 
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
-  async function load() {
+  const namesDirtyRef = useRef(false);
+  const namesHydratedRef = useRef(false);
+  const isEditingNamesRef = useRef(false);
+
+  useEffect(() => {
+    isEditingNamesRef.current = isEditingNames;
+  }, [isEditingNames]);
+
+  function hydrateHorseNamesFromRows(horseRows) {
+    if (!horseRows.length) return;
+    setHorseNames(
+      Object.fromEntries(
+        horseRows.map((h) => [h.horse_id, h.display_name || ""])
+      )
+    );
+    namesHydratedRef.current = true;
+    namesDirtyRef.current = false;
+  }
+
+  async function load({ syncNames = true } = {}) {
     const { data: roomData, error: roomError } = await supabase
       .from("derby_rooms")
       .select("*")
@@ -134,20 +154,30 @@ export default function DerbyPanelPage() {
     setAttachments(attachmentData || []);
     setBets(betData || []);
 
-    if (horseRows.length && !isEditingNames) {
-      setHorseNames(
-        Object.fromEntries(
-          horseRows.map((h) => [h.horse_id, h.display_name || ""])
-        )
-      );
+    const canSyncNames =
+      syncNames &&
+      horseRows.length &&
+      !isEditingNamesRef.current &&
+      !namesDirtyRef.current;
+
+    if (canSyncNames) {
+      hydrateHorseNamesFromRows(horseRows);
+    } else if (!horseRows.length) {
+      setHorseNames(EMPTY_NAMES);
+      namesHydratedRef.current = false;
+      namesDirtyRef.current = false;
     }
   }
 
   useEffect(() => {
-    load();
-    const id = setInterval(load, 1200);
+    load({ syncNames: true });
+
+    const id = setInterval(() => {
+      load({ syncNames: true });
+    }, 1400);
+
     return () => clearInterval(id);
-  }, [isEditingNames]);
+  }, []);
 
   const playerCount = room?.player_count ?? 3;
   const raceNumber = room?.race_number ?? 1;
@@ -284,7 +314,10 @@ export default function DerbyPanelPage() {
       setStake("1");
       setIsEditingNames(false);
 
-      await load();
+      namesDirtyRef.current = false;
+      namesHydratedRef.current = false;
+
+      await load({ syncNames: true });
       setMessage("部屋を初期化した。");
     } catch (error) {
       console.error("initializeRoom error", error);
@@ -305,10 +338,14 @@ export default function DerbyPanelPage() {
 
     try {
       for (const horse of horses) {
-        const nextName = horseNames[horse.horse_id]?.trim() || horse.display_name;
+        const nextName =
+          horseNames[horse.horse_id]?.trim() || horse.display_name;
         const { error } = await supabase
           .from("derby_horses")
-          .update({ display_name: nextName })
+          .update({
+            display_name: nextName,
+            updated_at: new Date().toISOString(),
+          })
           .eq("room_id", ROOM_ID)
           .eq("horse_id", horse.horse_id);
 
@@ -316,7 +353,10 @@ export default function DerbyPanelPage() {
       }
 
       setIsEditingNames(false);
-      await load();
+      namesDirtyRef.current = false;
+      namesHydratedRef.current = false;
+
+      await load({ syncNames: true });
       setMessage("馬名を保存した。");
     } catch (error) {
       console.error("saveHorseNames error", error);
@@ -357,6 +397,7 @@ export default function DerbyPanelPage() {
           attached_count: nextCount,
           has_trait: (horse?.has_trait || false) || selectedCard.isTrait,
           win_odds: getWinOdds(nextCount),
+          updated_at: new Date().toISOString(),
         })
         .eq("room_id", ROOM_ID)
         .eq("horse_id", selectedAttachHorse);
@@ -377,7 +418,7 @@ export default function DerbyPanelPage() {
 
       setSelectedCardId(null);
       setSelectedAttachHorse(null);
-      await load();
+      await load({ syncNames: false });
       setMessage("付与した。");
     } catch (error) {
       console.error("confirmAttach error", error);
@@ -427,7 +468,7 @@ export default function DerbyPanelPage() {
       setStake("1");
       setSelectedPlayer(null);
 
-      await load();
+      await load({ syncNames: false });
       setMessage("買い目を確定した。入力したチップ数を支払ってください。");
     } catch (error) {
       console.error("confirmBet error", error);
@@ -451,6 +492,7 @@ export default function DerbyPanelPage() {
           .update({
             final_rank: row.final_rank,
             final_distance: row.final_distance,
+            updated_at: new Date().toISOString(),
           })
           .eq("room_id", ROOM_ID)
           .eq("horse_id", row.horse_id);
@@ -469,7 +511,7 @@ export default function DerbyPanelPage() {
 
       if (roomUpdateRes.error) throw roomUpdateRes.error;
 
-      await load();
+      await load({ syncNames: false });
       setMessage("レース終了。共有画面で順位を確認してください。");
     } catch (error) {
       console.error("runRace error", error);
@@ -495,7 +537,7 @@ export default function DerbyPanelPage() {
 
       if (error) throw error;
 
-      await load();
+      await load({ syncNames: false });
       setMessage("精算画面を開いた。");
     } catch (error) {
       console.error("openSettlement error", error);
@@ -535,6 +577,7 @@ export default function DerbyPanelPage() {
           win_odds: 7,
           final_rank: null,
           final_distance: null,
+          updated_at: new Date().toISOString(),
         })
         .eq("room_id", ROOM_ID);
       if (resetHorses.error) throw resetHorses.error;
@@ -561,7 +604,8 @@ export default function DerbyPanelPage() {
       setStake("1");
       setIsEditingNames(false);
 
-      await load();
+      namesDirtyRef.current = false;
+      await load({ syncNames: false });
       setMessage("次レースを準備した。");
     } catch (error) {
       console.error("nextRace error", error);
@@ -612,12 +656,13 @@ export default function DerbyPanelPage() {
                 <input
                   value={horseNames[horse.id] || ""}
                   onFocus={() => setIsEditingNames(true)}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    namesDirtyRef.current = true;
                     setHorseNames((prev) => ({
                       ...prev,
                       [horse.id]: e.target.value,
-                    }))
-                  }
+                    }));
+                  }}
                   placeholder={horse.defaultName}
                   style={{
                     padding: "10px 12px",
