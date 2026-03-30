@@ -15,7 +15,7 @@ const HORSE_COLORS = {
   "05": "#8b63db",
 };
 
-function HorseIcon({ horseId, number, size = 74 }) {
+function HorseIcon({ horseId, number, size = 78 }) {
   const color = HORSE_COLORS[horseId] || "#777";
   const h = Math.round(size * 0.62);
 
@@ -28,68 +28,83 @@ function HorseIcon({ horseId, number, size = 74 }) {
         display: "inline-block",
       }}
     >
-      <svg viewBox="0 0 180 110" width={size} height={h} aria-hidden="true">
+      <svg viewBox="0 0 220 130" width={size} height={h} aria-hidden="true">
         <g>
           <path
-            d="M36 66 C36 48, 52 38, 76 38 L118 38 C140 38, 154 49, 160 64 L169 63 C175 62, 178 64, 179 68 C180 72, 177 75, 171 77 L161 79 C156 90, 143 98, 123 98 L70 98 C49 98, 36 87, 36 66 Z"
-            fill="#ffffff"
+            d="M34 78
+               C34 56, 53 43, 82 43
+               L128 43
+               C152 43, 170 54, 177 72
+               L190 72
+               C198 72, 203 76, 203 82
+               C203 88, 198 92, 190 92
+               L178 92
+               C171 106, 156 114, 132 114
+               L78 114
+               C50 114, 34 100, 34 78 Z"
+            fill="#fff"
             stroke="#1a1a1a"
-            strokeWidth="4"
+            strokeWidth="5"
           />
           <path
-            d="M108 38 C108 20, 123 9, 141 9 C152 9, 163 14, 169 24 L154 29 C149 23, 142 20, 135 20 C124 20, 115 27, 115 38 Z"
-            fill="#ffffff"
+            d="M116 43
+               C116 22, 134 10, 155 10
+               C170 10, 183 16, 191 28
+               L174 34
+               C168 26, 160 22, 150 22
+               C137 22, 124 31, 124 43 Z"
+            fill="#fff"
             stroke="#1a1a1a"
-            strokeWidth="4"
+            strokeWidth="5"
           />
           <path
-            d="M157 24 L173 13"
-            stroke="#1a1a1a"
-            strokeWidth="4"
-            strokeLinecap="round"
-          />
-          <path
-            d="M58 98 L54 108"
+            d="M176 28 L197 15"
             stroke="#1a1a1a"
             strokeWidth="5"
             strokeLinecap="round"
           />
           <path
-            d="M82 98 L78 108"
+            d="M60 114 L55 128"
             stroke="#1a1a1a"
-            strokeWidth="5"
+            strokeWidth="6"
             strokeLinecap="round"
           />
           <path
-            d="M116 98 L112 108"
+            d="M90 114 L84 128"
             stroke="#1a1a1a"
-            strokeWidth="5"
+            strokeWidth="6"
             strokeLinecap="round"
           />
           <path
-            d="M142 97 L146 108"
+            d="M130 114 L124 128"
             stroke="#1a1a1a"
-            strokeWidth="5"
+            strokeWidth="6"
             strokeLinecap="round"
           />
           <path
-            d="M36 62 L20 50"
+            d="M160 113 L166 128"
+            stroke="#1a1a1a"
+            strokeWidth="6"
+            strokeLinecap="round"
+          />
+          <path
+            d="M34 72 L18 58"
             stroke={color}
-            strokeWidth="8"
+            strokeWidth="10"
             strokeLinecap="round"
           />
           <rect
-            x="82"
-            y="50"
-            rx="7"
-            ry="7"
-            width="34"
-            height="22"
+            x="90"
+            y="57"
+            rx="8"
+            ry="8"
+            width="38"
+            height="24"
             fill={color}
             stroke="#1a1a1a"
-            strokeWidth="3"
+            strokeWidth="4"
           />
-          <circle cx="144" cy="31" r="3.3" fill="#1a1a1a" />
+          <circle cx="160" cy="34" r="4" fill="#1a1a1a" />
         </g>
       </svg>
 
@@ -325,7 +340,7 @@ export default function DerbyHostPage() {
 
   useEffect(() => {
     const nextKey =
-      room?.phase === "race" && room?.result_payload
+      room?.result_payload && room?.race_number
         ? `${room.race_number}-${room.updated_at || ""}`
         : "";
 
@@ -372,12 +387,12 @@ export default function DerbyHostPage() {
     return () => {
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
     };
-  }, [room?.phase, room?.result_payload, room?.race_number, room?.updated_at, playKey]);
+  }, [room?.result_payload, room?.race_number, room?.updated_at, playKey]);
 
   const interpolatedPositions = useMemo(() => {
     const base = Object.fromEntries(horses.map((h) => [h.horse_id, 3]));
 
-    if (room?.phase !== "race" || !resultSnapshots.length) {
+    if (!resultSnapshots.length) {
       return base;
     }
 
@@ -411,7 +426,7 @@ export default function DerbyHostPage() {
     });
 
     return result;
-  }, [horses, room?.phase, resultSnapshots, progress]);
+  }, [horses, resultSnapshots, progress]);
 
   const logsByHorse = useMemo(
     () => normalizeLogsByHorse(resultLogs, horses),
@@ -422,13 +437,8 @@ export default function DerbyHostPage() {
     const map = {};
 
     horses.forEach((horse) => {
-      if (room?.phase !== "race") {
-        map[horse.horse_id] = null;
-        return;
-      }
-
       const horseLogs = logsByHorse[horse.horse_id] || [];
-      if (!horseLogs.length || activeSegmentIndex < 0) {
+      if (!horseLogs.length || activeSegmentIndex < 0 || !runningRace) {
         map[horse.horse_id] = null;
         return;
       }
@@ -451,7 +461,7 @@ export default function DerbyHostPage() {
     });
 
     return map;
-  }, [horses, room?.phase, logsByHorse, activeSegmentIndex]);
+  }, [horses, logsByHorse, activeSegmentIndex, runningRace]);
 
   const displayHorses = useMemo(() => {
     const rankMap = Object.fromEntries(
@@ -593,7 +603,7 @@ export default function DerbyHostPage() {
             }}
           >
             {SEGMENTS.map((label, idx) => {
-              const active = activeSegmentIndex >= idx && room?.phase === "race";
+              const active = activeSegmentIndex >= idx && runningRace;
               return (
                 <div
                   key={label}
@@ -636,7 +646,7 @@ export default function DerbyHostPage() {
                 horse={horse}
                 percent={interpolatedPositions[horse.horse_id] ?? 3}
                 overlay={laneOverlays[horse.horse_id]}
-                showResult={room?.phase === "race" && !runningRace}
+                showResult={!!resultRanking.length && !runningRace}
               />
             ))}
           </div>

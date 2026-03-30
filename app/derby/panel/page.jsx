@@ -82,6 +82,7 @@ export default function DerbyPanelPage() {
     "04": "",
     "05": "",
   });
+  const [isEditingNames, setIsEditingNames] = useState(false);
 
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -133,7 +134,7 @@ export default function DerbyPanelPage() {
     setAttachments(attachmentData || []);
     setBets(betData || []);
 
-    if (horseRows.length) {
+    if (horseRows.length && !isEditingNames) {
       setHorseNames(
         Object.fromEntries(
           horseRows.map((h) => [h.horse_id, h.display_name || ""])
@@ -146,7 +147,7 @@ export default function DerbyPanelPage() {
     load();
     const id = setInterval(load, 1200);
     return () => clearInterval(id);
-  }, []);
+  }, [isEditingNames]);
 
   const playerCount = room?.player_count ?? 3;
   const raceNumber = room?.race_number ?? 1;
@@ -251,8 +252,7 @@ export default function DerbyPanelPage() {
         HORSE_DEFS.map((horse) => ({
           room_id: ROOM_ID,
           horse_id: horse.id,
-          display_name:
-            horseNames[horse.id]?.trim() || horse.defaultName,
+          display_name: horseNames[horse.id]?.trim() || horse.defaultName,
           flavor_label: horse.flavor,
           attached_count: 0,
           has_trait: false,
@@ -282,6 +282,7 @@ export default function DerbyPanelPage() {
       setTriSecond(null);
       setTriThird(null);
       setStake("1");
+      setIsEditingNames(false);
 
       await load();
       setMessage("部屋を初期化した。");
@@ -314,6 +315,7 @@ export default function DerbyPanelPage() {
         if (error) throw error;
       }
 
+      setIsEditingNames(false);
       await load();
       setMessage("馬名を保存した。");
     } catch (error) {
@@ -557,6 +559,7 @@ export default function DerbyPanelPage() {
       setTriSecond(null);
       setTriThird(null);
       setStake("1");
+      setIsEditingNames(false);
 
       await load();
       setMessage("次レースを準備した。");
@@ -608,6 +611,7 @@ export default function DerbyPanelPage() {
                 <div style={{ fontSize: 12, fontWeight: 700 }}>Horse {horse.id}</div>
                 <input
                   value={horseNames[horse.id] || ""}
+                  onFocus={() => setIsEditingNames(true)}
                   onChange={(e) =>
                     setHorseNames((prev) => ({
                       ...prev,
