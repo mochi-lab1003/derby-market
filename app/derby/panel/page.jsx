@@ -38,10 +38,7 @@ function judgeBet(bet, ranking) {
   if (bet.bet_type === "win") {
     const first = ranking.find((r) => r.final_rank === 1);
     const hit = first?.horse_id === bet.horse_1;
-    return {
-      hit,
-      payout: hit ? bet.back : 0,
-    };
+    return { hit, payout: hit ? bet.back : 0 };
   }
 
   if (bet.bet_type === "trifecta") {
@@ -54,10 +51,7 @@ function judgeBet(bet, ranking) {
       second === bet.horse_2 &&
       third === bet.horse_3;
 
-    return {
-      hit,
-      payout: hit ? bet.back : 0,
-    };
+    return { hit, payout: hit ? bet.back : 0 };
   }
 
   return { hit: false, payout: 0 };
@@ -142,8 +136,6 @@ export default function DerbyPanelPage() {
   const raceNumber = room?.race_number ?? 1;
   const players = getPlayers(playerCount);
 
-  const allCards = DECK;
-
   const cardsUsedBySelectedPlayer = useMemo(() => {
     if (!selectedPlayer) return new Set();
     return new Set(
@@ -155,7 +147,7 @@ export default function DerbyPanelPage() {
 
   const selectedPlayerVisibleCards = useMemo(() => {
     if (!selectedPlayer) return [];
-    return allCards.map((card) => {
+    return DECK.map((card) => {
       const usedByMe = cardsUsedBySelectedPlayer.has(card.id);
       const myAttachment = attachments.find(
         (a) => a.player_id === selectedPlayer && a.card_id === card.id
@@ -166,7 +158,7 @@ export default function DerbyPanelPage() {
         myAttachment,
       };
     });
-  }, [selectedPlayer, allCards, cardsUsedBySelectedPlayer, attachments]);
+  }, [selectedPlayer, cardsUsedBySelectedPlayer, attachments]);
 
   const selectedCard = selectedPlayerVisibleCards.find(
     (c) => c.id === selectedCardId
@@ -231,7 +223,6 @@ export default function DerbyPanelPage() {
         result_payload: null,
         updated_at: new Date().toISOString(),
       });
-
       if (roomRes.error) throw roomRes.error;
 
       const deleteHorsesRes = await supabase
@@ -308,7 +299,6 @@ export default function DerbyPanelPage() {
         is_trait: selectedCard.isTrait,
         revealed: false,
       });
-
       if (insertAttachmentRes.error) throw insertAttachmentRes.error;
 
       const updateHorseRes = await supabase
@@ -320,13 +310,10 @@ export default function DerbyPanelPage() {
         })
         .eq("room_id", ROOM_ID)
         .eq("horse_id", selectedAttachHorse);
-
       if (updateHorseRes.error) throw updateHorseRes.error;
 
       const totalUsed = attachments.length + 1;
-      const totalCardsShouldBeUsed = DECK.length;
-
-      if (totalUsed >= totalCardsShouldBeUsed) {
+      if (totalUsed >= DECK.length) {
         const roomUpdateRes = await supabase
           .from("derby_rooms")
           .update({
@@ -433,10 +420,36 @@ export default function DerbyPanelPage() {
       if (roomUpdateRes.error) throw roomUpdateRes.error;
 
       await load();
-      setMessage("レースを開始した。");
+      setMessage("レース終了。共有画面で順位を確認してください。");
     } catch (error) {
       console.error("runRace error", error);
       setMessage(`レース失敗: ${error.message || JSON.stringify(error)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function openSettlement() {
+    if (busy) return;
+    setBusy(true);
+    setMessage("");
+
+    try {
+      const { error } = await supabase
+        .from("derby_rooms")
+        .update({
+          phase: "settlement",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("room_id", ROOM_ID);
+
+      if (error) throw error;
+
+      await load();
+      setMessage("精算画面を開いた。");
+    } catch (error) {
+      console.error("openSettlement error", error);
+      setMessage(`精算遷移失敗: ${error.message || JSON.stringify(error)}`);
     } finally {
       setBusy(false);
     }
@@ -510,6 +523,7 @@ export default function DerbyPanelPage() {
   const attachEnabled = room?.phase === "attach";
   const betEnabled = room?.phase === "bet";
   const raceEnabled = room?.phase === "race";
+  const settlementEnabled = room?.phase === "settlement";
 
   return (
     <main style={{ minHeight: "100vh", background: "#fafafa", color: "#111", padding: 16 }}>
@@ -552,7 +566,7 @@ export default function DerbyPanelPage() {
               </button>
             ))}
 
-            {room?.phase === "race" && (
+            {(settlementEnabled || raceEnabled) && (
               <button
                 onClick={nextRace}
                 disabled={busy}
@@ -574,14 +588,20 @@ export default function DerbyPanelPage() {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 360px", gap: 16 }}>
           <section style={{ border: "1px solid #ddd", borderRadius: 20, background: "#fff", padding: 16 }}>
             <div style={{ fontSize: 18, marginBottom: 12 }}>
-              {attachEnabled ? "付与フェーズ" : betEnabled ? "賭けフェーズ" : "精算フェーズ"}
+              {attachEnabled
+                ? "付与フェーズ"
+                : betEnabled
+                ? "賭けフェーズ"
+                : raceEnabled
+                ? "クッション"
+                : "精算フェーズ"}
             </div>
 
             {!room && <div style={{ color: "#888" }}>まず部屋を初期化してください。</div>}
 
             {room && (
               <>
-                {!raceEnabled && (
+                {!raceEnabled && !settlementEnabled && (
                   <div
                     style={{
                       marginBottom: 14,
@@ -855,6 +875,43 @@ export default function DerbyPanelPage() {
                 )}
 
                 {raceEnabled && (
+                  <div
+                    style={{
+                      display: "grid",
+                      gap: 14,
+                      border: "1px solid #ecece6",
+                      borderRadius: 16,
+                      padding: 16,
+                      background: "#fafaf7",
+                    }}
+                  >
+                    <div style={{ fontSize: 18, fontWeight: 700 }}>
+                      レース終了
+                    </div>
+                    <div style={{ color: "#666", lineHeight: 1.6 }}>
+                      共有画面で順位を確認してください。
+                      <br />
+                      確認後に精算へ進みます。
+                    </div>
+
+                    <button
+                      onClick={openSettlement}
+                      disabled={busy}
+                      style={{
+                        padding: "12px 16px",
+                        borderRadius: 12,
+                        border: "1px solid #111",
+                        background: busy ? "#eee" : "#111",
+                        color: busy ? "#999" : "#fff",
+                        cursor: busy ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      精算へ進む
+                    </button>
+                  </div>
+                )}
+
+                {settlementEnabled && (
                   <div style={{ display: "grid", gap: 10 }}>
                     <div style={{ fontSize: 18, fontWeight: 700 }}>精算</div>
                     <div style={{ display: "grid", gap: 10 }}>

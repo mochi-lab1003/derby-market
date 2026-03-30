@@ -1,52 +1,88 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { ROOM_ID } from "@/lib/derbyConfig";
 
-function HorseChip({ horse, widthPercent }) {
+const SEGMENTS = ["START", "EARLY", "MID", "LATE", "FINAL"];
+
+function TrackLane({ horse, percent }) {
   return (
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "220px 1fr",
-        gap: 16,
+        gridTemplateColumns: "140px 1fr",
+        gap: 10,
         alignItems: "center",
       }}
     >
       <div
         style={{
-          border: "1px solid #ddd",
-          borderRadius: 16,
-          padding: 14,
+          border: "1px solid #e8e8e0",
+          borderRadius: 14,
           background: "#fff",
+          padding: "8px 10px",
+          minWidth: 0,
         }}
       >
-        <div style={{ fontWeight: 700, fontSize: 18 }}>{horse.display_name}</div>
-        <div style={{ fontSize: 13, color: "#666", marginTop: 4 }}>{horse.flavor_label}</div>
-        <div style={{ fontSize: 13, color: "#444", marginTop: 10 }}>
-          付与枚数: {horse.attached_count} / 単勝 x{horse.win_odds}
+        <div
+          style={{
+            fontSize: 13,
+            fontWeight: 700,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {horse.display_name}
+        </div>
+        <div
+          style={{
+            marginTop: 3,
+            fontSize: 10,
+            color: "#777",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {horse.flavor_label}
         </div>
       </div>
 
       <div
         style={{
           position: "relative",
-          height: 52,
+          height: 42,
           borderRadius: 999,
-          background: "linear-gradient(to right, #f0f0f0, #fafafa)",
-          border: "1px solid #ddd",
+          border: "1px solid #dfdfd8",
+          background: "linear-gradient(to right, #fbfbf8, #f3f3ee)",
           overflow: "hidden",
         }}
       >
+        {[20, 40, 60, 80].map((x) => (
+          <div
+            key={x}
+            style={{
+              position: "absolute",
+              left: `${x}%`,
+              top: 0,
+              bottom: 0,
+              width: 1,
+              background: "#e7e7e2",
+            }}
+          />
+        ))}
+
         <div
           style={{
             position: "absolute",
-            left: `${widthPercent}%`,
+            left: `${percent}%`,
             top: "50%",
             transform: "translate(-50%, -50%)",
-            fontSize: 28,
-            transition: "left 800ms ease",
+            transition: "left 1400ms ease",
+            fontSize: 24,
+            lineHeight: 1,
           }}
         >
           ♞
@@ -60,6 +96,8 @@ export default function DerbyHostPage() {
   const [room, setRoom] = useState(null);
   const [horses, setHorses] = useState([]);
   const [currentSegmentIndex, setCurrentSegmentIndex] = useState(-1);
+  const [liveLogs, setLiveLogs] = useState([]);
+  const timerRef = useRef(null);
 
   async function load() {
     const { data: roomData } = await supabase
@@ -85,118 +123,387 @@ export default function DerbyHostPage() {
   }, []);
 
   useEffect(() => {
-    if (!room?.result_payload?.segmentSnapshots?.length) {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+
+    if (
+      room?.phase !== "race" ||
+      !room?.result_payload?.segmentSnapshots?.length
+    ) {
       setCurrentSegmentIndex(-1);
+      setLiveLogs([]);
       return;
     }
 
+    setCurrentSegmentIndex(-1);
+    setLiveLogs([]);
+
     let index = -1;
-    const timer = setInterval(() => {
+    timerRef.current = setInterval(() => {
       index += 1;
+
       if (index >= room.result_payload.segmentSnapshots.length) {
-        clearInterval(timer);
+        clearInterval(timerRef.current);
+        timerRef.current = null;
         return;
       }
-      setCurrentSegmentIndex(index);
-    }, 1200);
 
-    return () => clearInterval(timer);
-  }, [room?.race_number, room?.phase]);
+      setCurrentSegmentIndex(index);
+
+      const maxLogs = Math.min(
+        2 + index * 2,
+        room?.result_payload?.logs?.length || 0
+      );
+      setLiveLogs((room?.result_payload?.logs || []).slice(0, maxLogs));
+    }, 1700);
+
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [room?.phase, room?.race_number, room?.result_payload]);
+
+  const currentSegment =
+    currentSegmentIndex >= 0 ? SEGMENTS[currentSegmentIndex] : null;
 
   const animatedPositions = useMemo(() => {
-    if (!room?.result_payload?.segmentSnapshots?.length || currentSegmentIndex < 0) {
-      return {};
+    const base = Object.fromEntries(horses.map((h) => [h.horse_id, 3]));
+
+    if (
+      room?.phase !== "race" ||
+      !room?.result_payload?.segmentSnapshots?.length ||
+      currentSegmentIndex < 0
+    ) {
+      return base;
     }
 
     const snapshot = room.result_payload.segmentSnapshots[currentSegmentIndex];
     const max = Math.max(...snapshot.positions.map((p) => p.total), 1);
 
     return Object.fromEntries(
-      snapshot.positions.map((p) => [p.horse_id, Math.max(3, (p.total / max) * 92)])
+      snapshot.positions.map((p) => [
+        p.horse_id,
+        Math.max(3, Math.min(95, (p.total / max) * 95)),
+      ])
     );
-  }, [room?.result_payload, currentSegmentIndex]);
-
-  const currentSegment =
-    currentSegmentIndex >= 0 && room?.result_payload?.segmentSnapshots?.[currentSegmentIndex]
-      ? room.result_payload.segmentSnapshots[currentSegmentIndex].segment
-      : null;
+  }, [horses, room?.phase, room?.result_payload, currentSegmentIndex]);
 
   return (
-    <main style={{ minHeight: "100vh", background: "#fbfbf8", color: "#111", padding: 24 }}>
-      <div style={{ maxWidth: 1240, margin: "0 auto", display: "grid", gap: 24 }}>
-        <div>
-          <h1 style={{ fontSize: 34, marginBottom: 8 }}>DERBY MARKET</h1>
-          <div style={{ color: "#666" }}>白い試験走路 / 公開情報のみ表示</div>
-        </div>
-
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <div style={{ padding: "8px 14px", border: "1px solid #ddd", borderRadius: 999, background: "#fff" }}>
-            Room: {ROOM_ID}
-          </div>
-          <div style={{ padding: "8px 14px", border: "1px solid #ddd", borderRadius: 999, background: "#fff" }}>
-            Phase: {room?.phase || "setup"}
-          </div>
-          <div style={{ padding: "8px 14px", border: "1px solid #ddd", borderRadius: 999, background: "#fff" }}>
-            Race: {room?.race_number || 1}
-          </div>
-          {currentSegment && (
-            <div style={{ padding: "8px 14px", border: "1px solid #111", borderRadius: 999, background: "#111", color: "#fff" }}>
-              Segment: {currentSegment}
-            </div>
-          )}
-        </div>
-
-        <section style={{ border: "1px solid #ddd", borderRadius: 24, background: "#fff", padding: 20 }}>
-          <div style={{ fontSize: 20, marginBottom: 16 }}>出走情報</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
-            {horses.map((horse) => (
-              <div key={horse.horse_id} style={{ border: "1px solid #eee", borderRadius: 18, padding: 16 }}>
-                <div style={{ fontWeight: 700, fontSize: 18 }}>{horse.display_name}</div>
-                <div style={{ color: "#666", fontSize: 13, marginTop: 4 }}>{horse.flavor_label}</div>
-                <div style={{ marginTop: 12, fontSize: 14 }}>付与枚数: {horse.attached_count}</div>
-                <div style={{ marginTop: 4, fontSize: 14 }}>特性: {horse.has_trait ? "あり" : "なし"}</div>
-                <div style={{ marginTop: 4, fontSize: 14 }}>単勝: x{horse.win_odds}</div>
+    <main
+      style={{
+        minHeight: "100vh",
+        background: "#fbfbf8",
+        color: "#111",
+        padding: 10,
+      }}
+    >
+      <div
+        style={{
+          maxWidth: 1200,
+          margin: "0 auto",
+          display: "grid",
+          gap: 10,
+        }}
+      >
+        <section
+          style={{
+            border: "1px solid #e5e5df",
+            borderRadius: 18,
+            background: "#fff",
+            padding: 12,
+            display: "grid",
+            gap: 10,
+          }}
+        >
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr auto auto auto",
+              gap: 8,
+              alignItems: "center",
+            }}
+          >
+            <div style={{ minWidth: 0 }}>
+              <div
+                style={{
+                  fontSize: 24,
+                  fontWeight: 800,
+                  lineHeight: 1.1,
+                }}
+              >
+                DERBY MARKET / TRACK VIEW
               </div>
-            ))}
+              <div style={{ color: "#777", fontSize: 11, marginTop: 2 }}>
+                白い試験走路 / 観戦専用
+              </div>
+            </div>
+
+            <div
+              style={{
+                padding: "6px 10px",
+                borderRadius: 999,
+                background: "#111",
+                color: "#fff",
+                fontSize: 11,
+                fontWeight: 700,
+              }}
+            >
+              ROOM {ROOM_ID}
+            </div>
+
+            <div
+              style={{
+                padding: "6px 10px",
+                borderRadius: 999,
+                background: "#111",
+                color: "#fff",
+                fontSize: 11,
+                fontWeight: 700,
+              }}
+            >
+              RACE {room?.race_number || 1}
+            </div>
+
+            <div
+              style={{
+                padding: "6px 10px",
+                borderRadius: 999,
+                background: currentSegment ? "#111" : "#f3f3ee",
+                color: currentSegment ? "#fff" : "#555",
+                fontSize: 11,
+                fontWeight: 700,
+              }}
+            >
+              {currentSegment || room?.phase || "setup"}
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(5, 1fr)",
+              gap: 8,
+            }}
+          >
+            {SEGMENTS.map((label, idx) => {
+              const active =
+                currentSegmentIndex >= idx && room?.phase === "race";
+              return (
+                <div
+                  key={label}
+                  style={{
+                    border: "1px solid #ecece6",
+                    borderRadius: 12,
+                    padding: "8px 6px",
+                    textAlign: "center",
+                    background: active ? "#111" : "#fafaf7",
+                    color: active ? "#fff" : "#666",
+                    fontSize: 11,
+                    fontWeight: 700,
+                  }}
+                >
+                  {label}
+                </div>
+              );
+            })}
           </div>
         </section>
 
-        <section style={{ border: "1px solid #ddd", borderRadius: 24, background: "#fff", padding: 20 }}>
-          <div style={{ fontSize: 20, marginBottom: 16 }}>レース</div>
-          <div style={{ display: "grid", gap: 16 }}>
+        <section
+          style={{
+            border: "1px solid #e5e5df",
+            borderRadius: 18,
+            background: "#fff",
+            padding: 12,
+            display: "grid",
+            gap: 10,
+          }}
+        >
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#333" }}>
+            CONTINUOUS TRACK
+          </div>
+
+          <div style={{ display: "grid", gap: 10 }}>
             {horses.map((horse) => (
-              <HorseChip
+              <TrackLane
                 key={horse.horse_id}
                 horse={horse}
-                widthPercent={animatedPositions[horse.horse_id] ?? 3}
+                percent={animatedPositions[horse.horse_id] ?? 3}
               />
             ))}
           </div>
         </section>
 
-        <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-          <div style={{ border: "1px solid #ddd", borderRadius: 24, background: "#fff", padding: 20 }}>
-            <div style={{ fontSize: 20, marginBottom: 16 }}>最終順位</div>
-            <div style={{ display: "grid", gap: 12 }}>
-              {[...(room?.result_payload?.ranking || [])].map((row) => (
-                <div key={row.horse_id} style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid #f0f0f0", paddingBottom: 8 }}>
-                  <span>{row.final_rank}位 / {row.display_name}</span>
-                  <span>{Number(row.final_distance).toFixed(2)}</span>
+        <section
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1.2fr 1fr 1fr",
+            gap: 10,
+          }}
+        >
+          <div
+            style={{
+              border: "1px solid #e5e5df",
+              borderRadius: 18,
+              background: "#fff",
+              padding: 12,
+              display: "grid",
+              gap: 8,
+            }}
+          >
+            <div style={{ fontSize: 14, fontWeight: 700 }}>出走表</div>
+
+            <div style={{ display: "grid", gap: 8 }}>
+              {horses.map((horse) => (
+                <div
+                  key={horse.horse_id}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr auto auto",
+                    gap: 8,
+                    alignItems: "center",
+                    border: "1px solid #f1f1eb",
+                    borderRadius: 12,
+                    padding: "8px 10px",
+                    background: "#fafaf7",
+                  }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 700,
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {horse.display_name}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 10,
+                        color: "#777",
+                        marginTop: 2,
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {horse.flavor_label}
+                    </div>
+                  </div>
+
+                  <div style={{ fontSize: 11, color: "#444" }}>
+                    {horse.attached_count}枚
+                  </div>
+                  <div style={{ fontSize: 11, fontWeight: 700 }}>
+                    x{horse.win_odds}
+                  </div>
                 </div>
               ))}
-              {!room?.result_payload?.ranking?.length && <div style={{ color: "#888" }}>まだ結果はありません。</div>}
             </div>
           </div>
 
-          <div style={{ border: "1px solid #ddd", borderRadius: 24, background: "#fff", padding: 20 }}>
-            <div style={{ fontSize: 20, marginBottom: 16 }}>ログ</div>
-            <div style={{ display: "grid", gap: 8, maxHeight: 360, overflow: "auto" }}>
-              {(room?.result_payload?.logs || []).map((log, i) => (
-                <div key={i} style={{ border: "1px solid #f0f0f0", borderRadius: 14, padding: 12, background: "#fafafa" }}>
-                  {log}
+          <div
+            style={{
+              border: "1px solid #e5e5df",
+              borderRadius: 18,
+              background: "#fff",
+              padding: 12,
+              display: "grid",
+              gap: 8,
+            }}
+          >
+            <div style={{ fontSize: 14, fontWeight: 700 }}>ログ</div>
+
+            <div
+              style={{
+                display: "grid",
+                gap: 8,
+                maxHeight: 190,
+                overflow: "auto",
+              }}
+            >
+              {(room?.phase === "race" ? liveLogs : room?.result_payload?.logs || [])
+                .slice(-6)
+                .map((log, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      border: "1px solid #f1f1eb",
+                      borderRadius: 12,
+                      padding: "8px 10px",
+                      background: "#fafaf7",
+                      fontSize: 11,
+                      lineHeight: 1.35,
+                    }}
+                  >
+                    {log}
+                  </div>
+                ))}
+
+              {!room?.result_payload?.logs?.length && room?.phase !== "race" && (
+                <div style={{ color: "#888", fontSize: 11 }}>
+                  まだログはありません。
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div
+            style={{
+              border: "1px solid #e5e5df",
+              borderRadius: 18,
+              background: "#fff",
+              padding: 12,
+              display: "grid",
+              gap: 8,
+            }}
+          >
+            <div style={{ fontSize: 14, fontWeight: 700 }}>結果</div>
+
+            <div style={{ display: "grid", gap: 8 }}>
+              {[...(room?.result_payload?.ranking || [])].map((row) => (
+                <div
+                  key={row.horse_id}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "40px 1fr auto",
+                    gap: 8,
+                    alignItems: "center",
+                    border: "1px solid #f1f1eb",
+                    borderRadius: 12,
+                    padding: "8px 10px",
+                    background: "#fafaf7",
+                  }}
+                >
+                  <div style={{ fontSize: 12, fontWeight: 800 }}>
+                    {row.final_rank}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 700,
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {row.display_name}
+                  </div>
+                  <div style={{ fontSize: 11, color: "#666" }}>
+                    {Number(row.final_distance).toFixed(2)}
+                  </div>
                 </div>
               ))}
-              {!room?.result_payload?.logs?.length && <div style={{ color: "#888" }}>ログはまだありません。</div>}
+
+              {!room?.result_payload?.ranking?.length && (
+                <div style={{ color: "#888", fontSize: 11 }}>
+                  まだ結果はありません。
+                </div>
+              )}
             </div>
           </div>
         </section>
