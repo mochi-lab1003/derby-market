@@ -89,7 +89,6 @@ export default function DerbyPanelPage() {
   const [message, setMessage] = useState("");
 
   const namesDirtyRef = useRef(false);
-  const namesHydratedRef = useRef(false);
   const isEditingNamesRef = useRef(false);
 
   useEffect(() => {
@@ -103,7 +102,6 @@ export default function DerbyPanelPage() {
         horseRows.map((h) => [h.horse_id, h.display_name || ""])
       )
     );
-    namesHydratedRef.current = true;
     namesDirtyRef.current = false;
   }
 
@@ -164,7 +162,6 @@ export default function DerbyPanelPage() {
       hydrateHorseNamesFromRows(horseRows);
     } else if (!horseRows.length) {
       setHorseNames(EMPTY_NAMES);
-      namesHydratedRef.current = false;
       namesDirtyRef.current = false;
     }
   }
@@ -315,7 +312,6 @@ export default function DerbyPanelPage() {
       setIsEditingNames(false);
 
       namesDirtyRef.current = false;
-      namesHydratedRef.current = false;
 
       await load({ syncNames: true });
       setMessage("部屋を初期化した。");
@@ -340,11 +336,11 @@ export default function DerbyPanelPage() {
       for (const horse of horses) {
         const nextName =
           horseNames[horse.horse_id]?.trim() || horse.display_name;
+
         const { error } = await supabase
           .from("derby_horses")
           .update({
             display_name: nextName,
-            updated_at: new Date().toISOString(),
           })
           .eq("room_id", ROOM_ID)
           .eq("horse_id", horse.horse_id);
@@ -354,7 +350,15 @@ export default function DerbyPanelPage() {
 
       setIsEditingNames(false);
       namesDirtyRef.current = false;
-      namesHydratedRef.current = false;
+
+      const roomTouchRes = await supabase
+        .from("derby_rooms")
+        .update({
+          updated_at: new Date().toISOString(),
+        })
+        .eq("room_id", ROOM_ID);
+
+      if (roomTouchRes.error) throw roomTouchRes.error;
 
       await load({ syncNames: true });
       setMessage("馬名を保存した。");
@@ -397,10 +401,10 @@ export default function DerbyPanelPage() {
           attached_count: nextCount,
           has_trait: (horse?.has_trait || false) || selectedCard.isTrait,
           win_odds: getWinOdds(nextCount),
-          updated_at: new Date().toISOString(),
         })
         .eq("room_id", ROOM_ID)
         .eq("horse_id", selectedAttachHorse);
+
       if (updateHorseRes.error) throw updateHorseRes.error;
 
       const totalUsed = attachments.length + 1;
@@ -414,6 +418,15 @@ export default function DerbyPanelPage() {
           .eq("room_id", ROOM_ID);
 
         if (roomUpdateRes.error) throw roomUpdateRes.error;
+      } else {
+        const roomTouchRes = await supabase
+          .from("derby_rooms")
+          .update({
+            updated_at: new Date().toISOString(),
+          })
+          .eq("room_id", ROOM_ID);
+
+        if (roomTouchRes.error) throw roomTouchRes.error;
       }
 
       setSelectedCardId(null);
@@ -460,6 +473,15 @@ export default function DerbyPanelPage() {
 
       if (insertRes.error) throw insertRes.error;
 
+      const roomTouchRes = await supabase
+        .from("derby_rooms")
+        .update({
+          updated_at: new Date().toISOString(),
+        })
+        .eq("room_id", ROOM_ID);
+
+      if (roomTouchRes.error) throw roomTouchRes.error;
+
       setBetType(null);
       setWinHorse(null);
       setTriFirst(null);
@@ -492,7 +514,6 @@ export default function DerbyPanelPage() {
           .update({
             final_rank: row.final_rank,
             final_distance: row.final_distance,
-            updated_at: new Date().toISOString(),
           })
           .eq("room_id", ROOM_ID)
           .eq("horse_id", row.horse_id);
@@ -577,7 +598,6 @@ export default function DerbyPanelPage() {
           win_odds: 7,
           final_rank: null,
           final_distance: null,
-          updated_at: new Date().toISOString(),
         })
         .eq("room_id", ROOM_ID);
       if (resetHorses.error) throw resetHorses.error;
@@ -605,6 +625,7 @@ export default function DerbyPanelPage() {
       setIsEditingNames(false);
 
       namesDirtyRef.current = false;
+
       await load({ syncNames: false });
       setMessage("次レースを準備した。");
     } catch (error) {

@@ -527,7 +527,6 @@ export default function DerbyHostPage() {
           .update({
             final_rank: row.final_rank,
             final_distance: row.final_distance,
-            updated_at: new Date().toISOString(),
           })
           .eq("room_id", ROOM_ID)
           .eq("horse_id", row.horse_id);
