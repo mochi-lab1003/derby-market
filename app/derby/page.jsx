@@ -8,93 +8,88 @@ import { simulateDerbyRace } from "@/lib/derbyRace";
 const SEGMENTS = ["START", "EARLY", "MID", "LATE", "FINAL"];
 
 const HORSE_COLORS = {
-  "01": "#e35d5d",
-  "02": "#4f83ff",
-  "03": "#41a85f",
-  "04": "#d9aa1f",
-  "05": "#8b62d9",
+  "01": "#df5a5a",
+  "02": "#4b7fff",
+  "03": "#3fa45b",
+  "04": "#d7a620",
+  "05": "#8b63db",
 };
 
-function HorseIcon({ horseId, number, size = 56 }) {
-  const color = HORSE_COLORS[horseId] || "#888";
-  const badgeSize = Math.round(size * 0.3);
+function HorseIcon({ horseId, number, size = 74 }) {
+  const color = HORSE_COLORS[horseId] || "#777";
+  const h = Math.round(size * 0.62);
 
   return (
     <div
       style={{
         position: "relative",
         width: size,
-        height: Math.round(size * 0.68),
+        height: h,
         display: "inline-block",
       }}
     >
-      <svg
-        viewBox="0 0 120 80"
-        width={size}
-        height={Math.round(size * 0.68)}
-        aria-hidden="true"
-      >
+      <svg viewBox="0 0 180 110" width={size} height={h} aria-hidden="true">
         <g>
           <path
-            d="M26 48 C26 36, 38 28, 53 28 L79 28 C92 28, 101 34, 103 44 L107 43 C111 42, 114 43, 115 46 C116 49, 114 51, 110 52 L104 53 C102 62, 93 67, 80 67 L49 67 C35 67, 26 60, 26 48 Z"
+            d="M36 66 C36 48, 52 38, 76 38 L118 38 C140 38, 154 49, 160 64 L169 63 C175 62, 178 64, 179 68 C180 72, 177 75, 171 77 L161 79 C156 90, 143 98, 123 98 L70 98 C49 98, 36 87, 36 66 Z"
             fill="#ffffff"
             stroke="#1a1a1a"
-            strokeWidth="3"
+            strokeWidth="4"
           />
           <path
-            d="M71 28 C71 16, 80 8, 92 8 C100 8, 106 12, 109 18 L99 21 C96 18, 92 17, 88 17 C82 17, 78 21, 78 28 Z"
+            d="M108 38 C108 20, 123 9, 141 9 C152 9, 163 14, 169 24 L154 29 C149 23, 142 20, 135 20 C124 20, 115 27, 115 38 Z"
             fill="#ffffff"
             stroke="#1a1a1a"
-            strokeWidth="3"
+            strokeWidth="4"
           />
           <path
-            d="M100 20 L111 13"
-            stroke="#1a1a1a"
-            strokeWidth="3"
-            strokeLinecap="round"
-          />
-          <path
-            d="M40 67 L37 77"
+            d="M157 24 L173 13"
             stroke="#1a1a1a"
             strokeWidth="4"
             strokeLinecap="round"
           />
           <path
-            d="M56 67 L54 77"
+            d="M58 98 L54 108"
             stroke="#1a1a1a"
-            strokeWidth="4"
+            strokeWidth="5"
             strokeLinecap="round"
           />
           <path
-            d="M78 67 L76 77"
+            d="M82 98 L78 108"
             stroke="#1a1a1a"
-            strokeWidth="4"
+            strokeWidth="5"
             strokeLinecap="round"
           />
           <path
-            d="M94 66 L96 77"
+            d="M116 98 L112 108"
             stroke="#1a1a1a"
-            strokeWidth="4"
+            strokeWidth="5"
             strokeLinecap="round"
           />
           <path
-            d="M27 45 L18 38"
+            d="M142 97 L146 108"
+            stroke="#1a1a1a"
+            strokeWidth="5"
+            strokeLinecap="round"
+          />
+          <path
+            d="M36 62 L20 50"
             stroke={color}
-            strokeWidth="6"
+            strokeWidth="8"
             strokeLinecap="round"
           />
           <rect
-            x="54"
-            y="37"
-            rx="6"
-            ry="6"
-            width="22"
-            height="16"
+            x="82"
+            y="50"
+            rx="7"
+            ry="7"
+            width="34"
+            height="22"
             fill={color}
             stroke="#1a1a1a"
-            strokeWidth="2"
+            strokeWidth="3"
           />
-          <circle cx="95" cy="23" r="2.4" fill="#1a1a1a" />
+          <circle cx="144" cy="31" r="3.3" fill="#1a1a1a" />
         </g>
       </svg>
 
@@ -103,17 +98,18 @@ function HorseIcon({ horseId, number, size = 56 }) {
           position: "absolute",
           right: -2,
           top: -4,
-          width: badgeSize,
-          height: badgeSize,
+          width: Math.round(size * 0.27),
+          height: Math.round(size * 0.27),
           borderRadius: "50%",
           background: color,
           color: "#fff",
           border: "2px solid #fff",
           display: "grid",
           placeItems: "center",
-          fontSize: Math.max(10, Math.round(size * 0.16)),
+          fontSize: Math.max(10, Math.round(size * 0.15)),
           fontWeight: 800,
           lineHeight: 1,
+          boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
         }}
       >
         {number}
@@ -122,12 +118,41 @@ function HorseIcon({ horseId, number, size = 56 }) {
   );
 }
 
-function TrackLane({ horse, percent }) {
+function LaneBadge({ children, tone = "neutral" }) {
+  const tones = {
+    neutral: { bg: "#111", fg: "#fff", bd: "#111" },
+    event: { bg: "#fff6df", fg: "#6d5500", bd: "#ead9a8" },
+    result: { bg: "#eef6ff", fg: "#174b86", bd: "#cfe2fb" },
+  };
+  const c = tones[tone] || tones.neutral;
+
+  return (
+    <div
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        padding: "5px 9px",
+        borderRadius: 999,
+        border: `1px solid ${c.bd}`,
+        background: c.bg,
+        color: c.fg,
+        fontSize: 11,
+        fontWeight: 700,
+        lineHeight: 1,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function TrackLane({ horse, percent, overlay, showResult }) {
   return (
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "170px 1fr",
+        gridTemplateColumns: "120px 1fr",
         gap: 10,
         alignItems: "center",
       }}
@@ -139,48 +164,28 @@ function TrackLane({ horse, percent }) {
           background: "#fff",
           padding: "8px 10px",
           minWidth: 0,
-          display: "grid",
-          gridTemplateColumns: "56px 1fr",
-          gap: 8,
-          alignItems: "center",
         }}
       >
-        <HorseIcon horseId={horse.horse_id} number={horse.horse_id} size={56} />
-
-        <div style={{ minWidth: 0 }}>
-          <div
-            style={{
-              fontSize: 13,
-              fontWeight: 700,
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-            }}
-          >
-            {horse.display_name}
-          </div>
-          <div
-            style={{
-              marginTop: 3,
-              fontSize: 10,
-              color: "#777",
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-            }}
-          >
-            {horse.flavor_label}
-          </div>
+        <div
+          style={{
+            fontSize: 12,
+            fontWeight: 700,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {horse.display_name}
         </div>
       </div>
 
       <div
         style={{
           position: "relative",
-          height: 54,
+          height: 64,
           borderRadius: 999,
           border: "1px solid #dfdfd8",
-          background: "linear-gradient(to right, #fbfbf8, #f3f3ee)",
+          background: "linear-gradient(to right, #fbfbf8, #f2f2ec)",
           overflow: "hidden",
         }}
       >
@@ -198,22 +203,58 @@ function TrackLane({ horse, percent }) {
           />
         ))}
 
+        {overlay && (
+          <div
+            style={{
+              position: "absolute",
+              left: 10,
+              top: 8,
+              zIndex: 3,
+            }}
+          >
+            <LaneBadge tone="event">{overlay}</LaneBadge>
+          </div>
+        )}
+
+        {showResult && horse.final_rank && (
+          <div
+            style={{
+              position: "absolute",
+              right: 10,
+              top: "50%",
+              transform: "translateY(-50%)",
+              zIndex: 3,
+            }}
+          >
+            <LaneBadge tone="result">{horse.final_rank}位</LaneBadge>
+          </div>
+        )}
+
         <div
           style={{
             position: "absolute",
             left: `${percent}%`,
             top: "50%",
             transform: "translate(-50%, -50%)",
-            transition: "left 1500ms ease",
-            display: "grid",
-            placeItems: "center",
+            transition: "left 160ms linear",
+            zIndex: 2,
           }}
         >
-          <HorseIcon horseId={horse.horse_id} number={horse.horse_id} size={62} />
+          <HorseIcon horseId={horse.horse_id} number={horse.horse_id} size={74} />
         </div>
       </div>
     </div>
   );
+}
+
+function normalizeLogsByHorse(logs, horses) {
+  const map = {};
+  horses.forEach((horse) => {
+    map[horse.horse_id] = (logs || []).filter((log) =>
+      log.includes(horse.display_name)
+    );
+  });
+  return map;
 }
 
 export default function DerbyHostPage() {
@@ -222,12 +263,12 @@ export default function DerbyHostPage() {
   const [attachments, setAttachments] = useState([]);
   const [bets, setBets] = useState([]);
 
-  const [currentSegmentIndex, setCurrentSegmentIndex] = useState(-1);
-  const [liveLogs, setLiveLogs] = useState([]);
-  const [playNonce, setPlayNonce] = useState(0);
+  const [progress, setProgress] = useState(0);
+  const [activeSegmentIndex, setActiveSegmentIndex] = useState(-1);
   const [runningRace, setRunningRace] = useState(false);
+  const [playKey, setPlayKey] = useState("");
 
-  const timerRef = useRef(null);
+  const animationRef = useRef(null);
 
   async function load() {
     const { data: roomData } = await supabase
@@ -238,27 +279,24 @@ export default function DerbyHostPage() {
 
     const raceNumber = roomData?.race_number ?? 1;
 
-    const [
-      { data: horseData },
-      { data: attachmentData },
-      { data: betData },
-    ] = await Promise.all([
-      supabase
-        .from("derby_horses")
-        .select("*")
-        .eq("room_id", ROOM_ID)
-        .order("horse_id", { ascending: true }),
-      supabase
-        .from("derby_attachments")
-        .select("*")
-        .eq("room_id", ROOM_ID)
-        .eq("race_number", raceNumber),
-      supabase
-        .from("derby_bets")
-        .select("*")
-        .eq("room_id", ROOM_ID)
-        .eq("race_number", raceNumber),
-    ]);
+    const [{ data: horseData }, { data: attachmentData }, { data: betData }] =
+      await Promise.all([
+        supabase
+          .from("derby_horses")
+          .select("*")
+          .eq("room_id", ROOM_ID)
+          .order("horse_id", { ascending: true }),
+        supabase
+          .from("derby_attachments")
+          .select("*")
+          .eq("room_id", ROOM_ID)
+          .eq("race_number", raceNumber),
+        supabase
+          .from("derby_bets")
+          .select("*")
+          .eq("room_id", ROOM_ID)
+          .eq("race_number", raceNumber),
+      ]);
 
     setRoom(roomData || null);
     setHorses(horseData || []);
@@ -281,88 +319,153 @@ export default function DerbyHostPage() {
     return neededPlayers.every((p) => allBetPlayers.includes(p));
   }, [room?.player_count, allBetPlayers]);
 
-  useEffect(() => {
-    const playKey = `${room?.race_number || 0}-${room?.phase || ""}-${
-      room?.updated_at || ""
-    }`;
+  const resultSnapshots = room?.result_payload?.segmentSnapshots || [];
+  const resultRanking = room?.result_payload?.ranking || [];
+  const resultLogs = room?.result_payload?.logs || [];
 
-    if (
-      room?.phase !== "race" ||
-      !room?.result_payload?.segmentSnapshots?.length
-    ) {
-      setCurrentSegmentIndex(-1);
-      setLiveLogs([]);
+  useEffect(() => {
+    const nextKey =
+      room?.phase === "race" && room?.result_payload
+        ? `${room.race_number}-${room.updated_at || ""}`
+        : "";
+
+    if (!nextKey) {
+      setProgress(0);
+      setActiveSegmentIndex(-1);
       setRunningRace(false);
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
+      if (animationRef.current) cancelAnimationFrame(animationRef.current);
       return;
     }
 
-    setPlayNonce((n) => n + 1);
+    if (nextKey === playKey) return;
 
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-
-    setCurrentSegmentIndex(-1);
-    setLiveLogs([]);
+    setPlayKey(nextKey);
+    setProgress(0);
+    setActiveSegmentIndex(0);
     setRunningRace(true);
 
-    let index = -1;
-    timerRef.current = setInterval(() => {
-      index += 1;
+    if (animationRef.current) cancelAnimationFrame(animationRef.current);
 
-      if (index >= room.result_payload.segmentSnapshots.length) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-        setRunningRace(false);
-        return;
-      }
+    const duration = 9000;
+    const startedAt = performance.now();
 
-      setCurrentSegmentIndex(index);
+    const tick = (now) => {
+      const elapsed = now - startedAt;
+      const nextProgress = Math.min(1, elapsed / duration);
+      setProgress(nextProgress);
 
-      const maxLogs = Math.min(
-        2 + index * 2,
-        room?.result_payload?.logs?.length || 0
+      const seg = Math.min(
+        SEGMENTS.length - 1,
+        Math.floor(nextProgress * SEGMENTS.length)
       );
-      setLiveLogs((room?.result_payload?.logs || []).slice(0, maxLogs));
-    }, 1700);
+      setActiveSegmentIndex(seg);
+
+      if (nextProgress < 1) {
+        animationRef.current = requestAnimationFrame(tick);
+      } else {
+        setRunningRace(false);
+      }
+    };
+
+    animationRef.current = requestAnimationFrame(tick);
 
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
+      if (animationRef.current) cancelAnimationFrame(animationRef.current);
     };
-  }, [room?.race_number, room?.phase, room?.updated_at, room?.result_payload]);
+  }, [room?.phase, room?.result_payload, room?.race_number, room?.updated_at, playKey]);
 
-  const currentSegment =
-    currentSegmentIndex >= 0 ? SEGMENTS[currentSegmentIndex] : null;
-
-  const animatedPositions = useMemo(() => {
+  const interpolatedPositions = useMemo(() => {
     const base = Object.fromEntries(horses.map((h) => [h.horse_id, 3]));
 
-    if (
-      room?.phase !== "race" ||
-      !room?.result_payload?.segmentSnapshots?.length ||
-      currentSegmentIndex < 0
-    ) {
+    if (room?.phase !== "race" || !resultSnapshots.length) {
       return base;
     }
 
-    const snapshot = room.result_payload.segmentSnapshots[currentSegmentIndex];
-    const max = Math.max(...snapshot.positions.map((p) => p.total), 1);
+    const segmentFloat = progress * SEGMENTS.length;
+    const segIndex = Math.min(SEGMENTS.length - 1, Math.floor(segmentFloat));
+    const localT = Math.max(0, Math.min(1, segmentFloat - segIndex));
 
-    return Object.fromEntries(
-      snapshot.positions.map((p) => [
-        p.horse_id,
-        Math.max(3, Math.min(95, (p.total / max) * 95)),
-      ])
+    const prevSnapshot = segIndex <= 0 ? null : resultSnapshots[segIndex - 1];
+    const currentSnapshot = resultSnapshots[segIndex];
+
+    if (!currentSnapshot) return base;
+
+    const currentMap = Object.fromEntries(
+      currentSnapshot.positions.map((p) => [p.horse_id, p.total])
     );
-  }, [horses, room?.phase, room?.result_payload, currentSegmentIndex, playNonce]);
+    const prevMap = prevSnapshot
+      ? Object.fromEntries(prevSnapshot.positions.map((p) => [p.horse_id, p.total]))
+      : {};
+
+    const maxTotal = Math.max(
+      ...resultSnapshots.flatMap((s) => s.positions.map((p) => p.total)),
+      1
+    );
+
+    const result = {};
+    horses.forEach((horse) => {
+      const currentTotal = currentMap[horse.horse_id] ?? 0;
+      const previousTotal = prevSnapshot ? prevMap[horse.horse_id] ?? 0 : 0;
+      const mixed = previousTotal + (currentTotal - previousTotal) * localT;
+      result[horse.horse_id] = Math.max(3, Math.min(95, (mixed / maxTotal) * 95));
+    });
+
+    return result;
+  }, [horses, room?.phase, resultSnapshots, progress]);
+
+  const logsByHorse = useMemo(
+    () => normalizeLogsByHorse(resultLogs, horses),
+    [resultLogs, horses]
+  );
+
+  const laneOverlays = useMemo(() => {
+    const map = {};
+
+    horses.forEach((horse) => {
+      if (room?.phase !== "race") {
+        map[horse.horse_id] = null;
+        return;
+      }
+
+      const horseLogs = logsByHorse[horse.horse_id] || [];
+      if (!horseLogs.length || activeSegmentIndex < 0) {
+        map[horse.horse_id] = null;
+        return;
+      }
+
+      let matched = null;
+
+      if (activeSegmentIndex === 0) {
+        matched = horseLogs.find(
+          (l) => l.includes("スタートダッシュ") || l.includes("気分屋")
+        );
+      } else if (activeSegmentIndex === 3) {
+        matched = horseLogs.find((l) => l.includes("怠け者"));
+      } else if (activeSegmentIndex === 4) {
+        matched = horseLogs.find((l) => l.includes("根性"));
+      }
+
+      map[horse.horse_id] = matched
+        ? matched.replace(`${horse.display_name} / `, "")
+        : null;
+    });
+
+    return map;
+  }, [horses, room?.phase, logsByHorse, activeSegmentIndex]);
+
+  const displayHorses = useMemo(() => {
+    const rankMap = Object.fromEntries(
+      resultRanking.map((r) => [r.horse_id, r.final_rank])
+    );
+
+    return horses.map((horse) => ({
+      ...horse,
+      final_rank: rankMap[horse.horse_id] ?? null,
+    }));
+  }, [horses, resultRanking]);
 
   async function runRaceFromHost() {
-    if (!allBetsConfirmed || runningRace) return;
+    if (!allBetsConfirmed || runningRace || room?.phase !== "bet") return;
 
     try {
       setRunningRace(true);
@@ -449,44 +552,11 @@ export default function DerbyHostPage() {
               </div>
             </div>
 
-            <div
-              style={{
-                padding: "6px 10px",
-                borderRadius: 999,
-                background: "#111",
-                color: "#fff",
-                fontSize: 11,
-                fontWeight: 700,
-              }}
-            >
-              ROOM {ROOM_ID}
-            </div>
-
-            <div
-              style={{
-                padding: "6px 10px",
-                borderRadius: 999,
-                background: "#111",
-                color: "#fff",
-                fontSize: 11,
-                fontWeight: 700,
-              }}
-            >
-              RACE {room?.race_number || 1}
-            </div>
-
-            <div
-              style={{
-                padding: "6px 10px",
-                borderRadius: 999,
-                background: currentSegment ? "#111" : "#f3f3ee",
-                color: currentSegment ? "#fff" : "#555",
-                fontSize: 11,
-                fontWeight: 700,
-              }}
-            >
-              {currentSegment || room?.phase || "setup"}
-            </div>
+            <LaneBadge>{`ROOM ${ROOM_ID}`}</LaneBadge>
+            <LaneBadge>{`RACE ${room?.race_number || 1}`}</LaneBadge>
+            <LaneBadge>
+              {activeSegmentIndex >= 0 ? SEGMENTS[activeSegmentIndex] : room?.phase || "setup"}
+            </LaneBadge>
 
             <button
               onClick={runRaceFromHost}
@@ -523,8 +593,7 @@ export default function DerbyHostPage() {
             }}
           >
             {SEGMENTS.map((label, idx) => {
-              const active =
-                currentSegmentIndex >= idx && room?.phase === "race";
+              const active = activeSegmentIndex >= idx && room?.phase === "race";
               return (
                 <div
                   key={label}
@@ -561,189 +630,15 @@ export default function DerbyHostPage() {
           </div>
 
           <div style={{ display: "grid", gap: 10 }}>
-            {horses.map((horse) => (
+            {displayHorses.map((horse) => (
               <TrackLane
-                key={`${horse.horse_id}-${playNonce}`}
+                key={`${horse.horse_id}-${playKey}`}
                 horse={horse}
-                percent={animatedPositions[horse.horse_id] ?? 3}
+                percent={interpolatedPositions[horse.horse_id] ?? 3}
+                overlay={laneOverlays[horse.horse_id]}
+                showResult={room?.phase === "race" && !runningRace}
               />
             ))}
-          </div>
-        </section>
-
-        <section
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1.25fr 1fr 1fr",
-            gap: 10,
-          }}
-        >
-          <div
-            style={{
-              border: "1px solid #e5e5df",
-              borderRadius: 18,
-              background: "#fff",
-              padding: 12,
-              display: "grid",
-              gap: 8,
-            }}
-          >
-            <div style={{ fontSize: 14, fontWeight: 700 }}>出走表</div>
-
-            <div style={{ display: "grid", gap: 8 }}>
-              {horses.map((horse) => (
-                <div
-                  key={horse.horse_id}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "50px 1fr auto auto",
-                    gap: 8,
-                    alignItems: "center",
-                    border: "1px solid #f1f1eb",
-                    borderRadius: 12,
-                    padding: "8px 10px",
-                    background: "#fafaf7",
-                  }}
-                >
-                  <HorseIcon horseId={horse.horse_id} number={horse.horse_id} size={42} />
-
-                  <div style={{ minWidth: 0 }}>
-                    <div
-                      style={{
-                        fontSize: 12,
-                        fontWeight: 700,
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                    >
-                      {horse.display_name}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 10,
-                        color: "#777",
-                        marginTop: 2,
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                    >
-                      {horse.flavor_label}
-                    </div>
-                  </div>
-
-                  <div style={{ fontSize: 11, color: "#444" }}>
-                    {horse.attached_count}枚
-                  </div>
-                  <div style={{ fontSize: 11, fontWeight: 700 }}>
-                    x{horse.win_odds}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div
-            style={{
-              border: "1px solid #e5e5df",
-              borderRadius: 18,
-              background: "#fff",
-              padding: 12,
-              display: "grid",
-              gap: 8,
-            }}
-          >
-            <div style={{ fontSize: 14, fontWeight: 700 }}>ログ</div>
-
-            <div
-              style={{
-                display: "grid",
-                gap: 8,
-                maxHeight: 210,
-                overflow: "auto",
-              }}
-            >
-              {(room?.phase === "race" ? liveLogs : room?.result_payload?.logs || [])
-                .slice(-6)
-                .map((log, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      border: "1px solid #f1f1eb",
-                      borderRadius: 12,
-                      padding: "8px 10px",
-                      background: "#fafaf7",
-                      fontSize: 11,
-                      lineHeight: 1.35,
-                    }}
-                  >
-                    {log}
-                  </div>
-                ))}
-
-              {!room?.result_payload?.logs?.length && room?.phase !== "race" && (
-                <div style={{ color: "#888", fontSize: 11 }}>
-                  まだログはありません。
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div
-            style={{
-              border: "1px solid #e5e5df",
-              borderRadius: 18,
-              background: "#fff",
-              padding: 12,
-              display: "grid",
-              gap: 8,
-            }}
-          >
-            <div style={{ fontSize: 14, fontWeight: 700 }}>結果</div>
-
-            <div style={{ display: "grid", gap: 8 }}>
-              {[...(room?.result_payload?.ranking || [])].map((row) => (
-                <div
-                  key={row.horse_id}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "34px 40px 1fr auto",
-                    gap: 8,
-                    alignItems: "center",
-                    border: "1px solid #f1f1eb",
-                    borderRadius: 12,
-                    padding: "8px 10px",
-                    background: "#fafaf7",
-                  }}
-                >
-                  <div style={{ fontSize: 12, fontWeight: 800 }}>
-                    {row.final_rank}
-                  </div>
-                  <HorseIcon horseId={row.horse_id} number={row.horse_id} size={36} />
-                  <div
-                    style={{
-                      fontSize: 12,
-                      fontWeight: 700,
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
-                  >
-                    {row.display_name}
-                  </div>
-                  <div style={{ fontSize: 11, color: "#666" }}>
-                    {Number(row.final_distance).toFixed(2)}
-                  </div>
-                </div>
-              ))}
-
-              {!room?.result_payload?.ranking?.length && (
-                <div style={{ color: "#888", fontSize: 11 }}>
-                  まだ結果はありません。
-                </div>
-              )}
-            </div>
           </div>
         </section>
       </div>
