@@ -7,103 +7,39 @@ import { simulateDerbyRace } from "@/lib/derbyRace";
 
 const SEGMENTS = ["START", "EARLY", "MID", "LATE", "FINAL"];
 
-const HORSE_COLORS = {
-  "01": "#d84d4d",
-  "02": "#3972f6",
-  "03": "#33a25a",
-  "04": "#d6a114",
-  "05": "#8756de",
+const HORSE_IMAGE_SRC = {
+  "01": "/derby/horses/horse-01.png",
+  "02": "/derby/horses/horse-02.png",
+  "03": "/derby/horses/horse-03.png",
+  "04": "/derby/horses/horse-04.png",
+  "05": "/derby/horses/horse-05.png",
 };
 
-function HorseIcon({ horseId, number, size = 76 }) {
-  const color = HORSE_COLORS[horseId] || "#777";
-  const h = Math.round(size * 0.7);
+function HorseIcon({ horseId, size = 78 }) {
+  const src = HORSE_IMAGE_SRC[horseId] || HORSE_IMAGE_SRC["01"];
 
   return (
     <div
       style={{
-        position: "relative",
         width: size,
-        height: h,
-        display: "inline-block",
+        height: size * 0.62,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        pointerEvents: "none",
+        userSelect: "none",
       }}
     >
-      <svg viewBox="0 0 260 160" width={size} height={h} aria-hidden="true">
-        <g>
-          <path
-            d="M42 86 C24 70, 20 54, 26 38"
-            stroke="#1b1b1b"
-            strokeWidth="8"
-            strokeLinecap="round"
-            fill="none"
-          />
-          <ellipse
-            cx="108"
-            cy="88"
-            rx="62"
-            ry="28"
-            fill="#fff"
-            stroke="#1b1b1b"
-            strokeWidth="6"
-          />
-          <path
-            d="M146 76 L178 44"
-            stroke="#1b1b1b"
-            strokeWidth="15"
-            strokeLinecap="round"
-          />
-          <ellipse
-            cx="202"
-            cy="36"
-            rx="24"
-            ry="18"
-            fill="#fff"
-            stroke="#1b1b1b"
-            strokeWidth="6"
-          />
-          <path d="M194 18 L189 4" stroke="#1b1b1b" strokeWidth="6" strokeLinecap="round" />
-          <path d="M208 18 L214 4" stroke="#1b1b1b" strokeWidth="6" strokeLinecap="round" />
-          <path d="M220 39 L236 42" stroke="#1b1b1b" strokeWidth="6" strokeLinecap="round" />
-          <path d="M78 112 L72 148" stroke="#1b1b1b" strokeWidth="7" strokeLinecap="round" />
-          <path d="M102 114 L98 148" stroke="#1b1b1b" strokeWidth="7" strokeLinecap="round" />
-          <path d="M132 112 L128 148" stroke="#1b1b1b" strokeWidth="7" strokeLinecap="round" />
-          <path d="M152 108 L160 148" stroke="#1b1b1b" strokeWidth="7" strokeLinecap="round" />
-          <rect
-            x="96"
-            y="76"
-            rx="8"
-            ry="8"
-            width="34"
-            height="24"
-            fill={color}
-            stroke="#1b1b1b"
-            strokeWidth="4"
-          />
-          <circle cx="208" cy="34" r="3.5" fill="#1b1b1b" />
-        </g>
-      </svg>
-
-      <div
+      <img
+        src={src}
+        alt={`horse-${horseId}`}
         style={{
-          position: "absolute",
-          right: -2,
-          top: -4,
-          width: Math.round(size * 0.28),
-          height: Math.round(size * 0.28),
-          borderRadius: "50%",
-          background: color,
-          color: "#fff",
-          border: "2px solid #fff",
-          display: "grid",
-          placeItems: "center",
-          fontSize: Math.max(10, Math.round(size * 0.15)),
-          fontWeight: 800,
-          lineHeight: 1,
-          boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+          width: "100%",
+          height: "100%",
+          objectFit: "contain",
+          display: "block",
         }}
-      >
-        {number}
-      </div>
+      />
     </div>
   );
 }
@@ -113,7 +49,9 @@ function LaneBadge({ children, tone = "neutral" }) {
     neutral: { bg: "#111", fg: "#fff", bd: "#111" },
     event: { bg: "#fff6df", fg: "#6d5500", bd: "#ead9a8" },
     result: { bg: "#eef6ff", fg: "#174b86", bd: "#cfe2fb" },
+    winner: { bg: "#111", fg: "#fff", bd: "#111" },
   };
+
   const c = tones[tone] || tones.neutral;
 
   return (
@@ -127,7 +65,7 @@ function LaneBadge({ children, tone = "neutral" }) {
         background: c.bg,
         color: c.fg,
         fontSize: 11,
-        fontWeight: 700,
+        fontWeight: 900,
         lineHeight: 1,
         whiteSpace: "nowrap",
       }}
@@ -137,12 +75,31 @@ function LaneBadge({ children, tone = "neutral" }) {
   );
 }
 
-function TrackLane({ horse, percent, overlay, showResult }) {
+function shortenOverlay(text) {
+  if (!text) return null;
+  if (text.includes("スタートダッシュ")) return "スタート";
+  if (text.includes("気分屋")) return "気分";
+  if (text.includes("怠け者")) return "怠け";
+  if (text.includes("根性")) return "根性";
+  return text;
+}
+
+function TrackLane({
+  horse,
+  percent,
+  overlay,
+  showResult,
+  runningRace,
+  progress,
+}) {
+  const bob = runningRace ? Math.sin(progress * 22) * 2 : 0;
+  const isWinner = showResult && horse.final_rank === 1;
+
   return (
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "112px 1fr",
+        gridTemplateColumns: "118px 1fr",
         gap: 8,
         alignItems: "center",
       }}
@@ -152,7 +109,7 @@ function TrackLane({ horse, percent, overlay, showResult }) {
           border: "1px solid #ebe9df",
           borderRadius: 12,
           background: "#fff",
-          padding: "7px 8px",
+          padding: "8px 9px",
           minWidth: 0,
         }}
       >
@@ -172,7 +129,7 @@ function TrackLane({ horse, percent, overlay, showResult }) {
       <div
         style={{
           position: "relative",
-          height: 60,
+          height: 64,
           borderRadius: 999,
           border: "1px solid #dfdfd8",
           background: "linear-gradient(to right, #fbfbf8, #f2f2ec)",
@@ -193,18 +150,31 @@ function TrackLane({ horse, percent, overlay, showResult }) {
           />
         ))}
 
+        <div
+          style={{
+            position: "absolute",
+            right: 20,
+            top: 0,
+            bottom: 0,
+            width: 3,
+            background: "#111",
+            zIndex: 1,
+            opacity: 0.92,
+          }}
+        />
+
         {overlay && (
           <div
             style={{
               position: "absolute",
               left: 8,
-              top: 6,
+              top: 7,
               zIndex: 3,
               maxWidth: "48%",
               overflow: "hidden",
             }}
           >
-            <LaneBadge tone="event">{overlay}</LaneBadge>
+            <LaneBadge tone="event">{shortenOverlay(overlay)}</LaneBadge>
           </div>
         )}
 
@@ -212,13 +182,15 @@ function TrackLane({ horse, percent, overlay, showResult }) {
           <div
             style={{
               position: "absolute",
-              right: 8,
+              right: 28,
               top: "50%",
               transform: "translateY(-50%)",
               zIndex: 3,
             }}
           >
-            <LaneBadge tone="result">{horse.final_rank}位</LaneBadge>
+            <LaneBadge tone={horse.final_rank === 1 ? "winner" : "result"}>
+              {horse.final_rank}位
+            </LaneBadge>
           </div>
         )}
 
@@ -227,12 +199,15 @@ function TrackLane({ horse, percent, overlay, showResult }) {
             position: "absolute",
             left: `${percent}%`,
             top: "50%",
-            transform: "translate(-50%, -50%)",
+            transform: `translate(-50%, -50%) translateY(${bob}px) scale(${
+              isWinner ? 1.05 : 1
+            })`,
             zIndex: 2,
             willChange: "left, transform",
+            transition: showResult ? "transform 220ms ease" : "none",
           }}
         >
-          <HorseIcon horseId={horse.horse_id} number={horse.horse_id} size={72} />
+          <HorseIcon horseId={horse.horse_id} size={78} />
         </div>
       </div>
     </div>
@@ -258,10 +233,7 @@ function buildFallbackSnapshots(horses, ranking) {
 
   const finals = horses.map((h) => {
     const ranked = rankMap[h.horse_id];
-    const dist =
-      ranked?.final_distance ??
-      h.final_distance ??
-      0;
+    const dist = ranked?.final_distance ?? h.final_distance ?? 0;
 
     return {
       horse_id: h.horse_id,
@@ -404,7 +376,10 @@ export default function DerbyHostPage() {
   const allBetsConfirmed = useMemo(() => {
     const playerCount = room?.player_count ?? 0;
     if (!playerCount) return false;
-    const neededPlayers = Array.from({ length: playerCount }, (_, i) => `P${i + 1}`);
+    const neededPlayers = Array.from(
+      { length: playerCount },
+      (_, i) => `P${i + 1}`
+    );
     return neededPlayers.every((p) => allBetPlayers.includes(p));
   }, [room?.player_count, allBetPlayers]);
 
@@ -468,7 +443,7 @@ export default function DerbyHostPage() {
   }, [room]);
 
   const interpolatedPositions = useMemo(() => {
-    const base = Object.fromEntries(horses.map((h) => [h.horse_id, 3]));
+    const base = Object.fromEntries(horses.map((h) => [h.horse_id, 18]));
 
     if (!usableSnapshots.length) {
       return base;
@@ -486,8 +461,11 @@ export default function DerbyHostPage() {
     const currentMap = Object.fromEntries(
       currentSnapshot.positions.map((p) => [p.horse_id, p.total])
     );
+
     const prevMap = prevSnapshot?.positions?.length
-      ? Object.fromEntries(prevSnapshot.positions.map((p) => [p.horse_id, p.total]))
+      ? Object.fromEntries(
+          prevSnapshot.positions.map((p) => [p.horse_id, p.total])
+        )
       : {};
 
     const maxTotal = Math.max(
@@ -502,11 +480,26 @@ export default function DerbyHostPage() {
       const currentTotal = Number(currentMap[horse.horse_id] ?? 0);
       const previousTotal = Number(prevMap[horse.horse_id] ?? 0);
       const mixed = previousTotal + (currentTotal - previousTotal) * localT;
-      result[horse.horse_id] = Math.max(3, Math.min(95, (mixed / maxTotal) * 95));
+
+      const ratio = Math.max(0, Math.min(1, mixed / maxTotal));
+      const compressed = Math.pow(ratio, 0.7);
+
+      const minVisual = 18;
+      const maxVisual = 95;
+
+      result[horse.horse_id] =
+        minVisual + compressed * (maxVisual - minVisual);
     });
 
+    if (!runningRace && resultRanking.length) {
+      const finishPositions = [95, 93, 91, 89, 87];
+      resultRanking.forEach((r) => {
+        result[r.horse_id] = finishPositions[r.final_rank - 1] ?? 85;
+      });
+    }
+
     return result;
-  }, [horses, usableSnapshots, progress]);
+  }, [horses, usableSnapshots, progress, runningRace, resultRanking]);
 
   const logsByHorse = useMemo(
     () => normalizeLogsByHorse(resultLogs, horses),
@@ -633,7 +626,14 @@ export default function DerbyHostPage() {
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+          <div
+            style={{
+              display: "flex",
+              gap: 6,
+              alignItems: "center",
+              flexWrap: "wrap",
+            }}
+          >
             <LaneBadge>{`RACE ${room?.race_number || 1}`}</LaneBadge>
             <LaneBadge>
               {runningRace && activeSegmentIndex >= 0
@@ -682,9 +682,11 @@ export default function DerbyHostPage() {
             <TrackLane
               key={`${horse.horse_id}-${playKey || "idle"}`}
               horse={horse}
-              percent={interpolatedPositions[horse.horse_id] ?? 3}
+              percent={interpolatedPositions[horse.horse_id] ?? 18}
               overlay={laneOverlays[horse.horse_id]}
               showResult={!!resultRanking.length && !runningRace}
+              runningRace={runningRace}
+              progress={progress}
             />
           ))}
         </section>
