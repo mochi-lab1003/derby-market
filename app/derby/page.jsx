@@ -17,7 +17,7 @@ const HORSE_COLORS = {
 
 function HorseIcon({ horseId, number, size = 76 }) {
   const color = HORSE_COLORS[horseId] || "#777";
-  const h = Math.round(size * 0.62);
+  const h = Math.round(size * 0.7);
 
   return (
     <div
@@ -28,53 +28,58 @@ function HorseIcon({ horseId, number, size = 76 }) {
         display: "inline-block",
       }}
     >
-      <svg viewBox="0 0 220 130" width={size} height={h} aria-hidden="true">
+      <svg viewBox="0 0 260 160" width={size} height={h} aria-hidden="true">
         <g>
           <path
-            d="M34 80
-               C34 57, 53 43, 80 43
-               L128 43
-               C154 43, 171 55, 178 73
-               L191 73
-               C199 73, 204 77, 204 83
-               C204 89, 199 93, 191 93
-               L178 93
-               C171 107, 156 115, 132 115
-               L77 115
-               C50 115, 34 101, 34 80 Z"
+            d="M42 86 C24 70, 20 54, 26 38"
+            stroke="#1b1b1b"
+            strokeWidth="8"
+            strokeLinecap="round"
+            fill="none"
+          />
+          <ellipse
+            cx="108"
+            cy="88"
+            rx="62"
+            ry="28"
             fill="#fff"
             stroke="#1b1b1b"
-            strokeWidth="5"
+            strokeWidth="6"
           />
           <path
-            d="M118 43
-               C118 20, 137 9, 157 9
-               C172 9, 185 16, 193 29
-               L176 35
-               C169 26, 161 22, 151 22
-               C138 22, 126 30, 126 43 Z"
+            d="M146 76 L178 44"
+            stroke="#1b1b1b"
+            strokeWidth="15"
+            strokeLinecap="round"
+          />
+          <ellipse
+            cx="202"
+            cy="36"
+            rx="24"
+            ry="18"
             fill="#fff"
             stroke="#1b1b1b"
-            strokeWidth="5"
+            strokeWidth="6"
           />
-          <path d="M177 28 L197 14" stroke="#1b1b1b" strokeWidth="5" strokeLinecap="round" />
-          <path d="M57 115 L51 129" stroke="#1b1b1b" strokeWidth="6" strokeLinecap="round" />
-          <path d="M88 115 L82 129" stroke="#1b1b1b" strokeWidth="6" strokeLinecap="round" />
-          <path d="M129 115 L123 129" stroke="#1b1b1b" strokeWidth="6" strokeLinecap="round" />
-          <path d="M160 114 L166 129" stroke="#1b1b1b" strokeWidth="6" strokeLinecap="round" />
-          <path d="M34 73 L18 59" stroke={color} strokeWidth="10" strokeLinecap="round" />
+          <path d="M194 18 L189 4" stroke="#1b1b1b" strokeWidth="6" strokeLinecap="round" />
+          <path d="M208 18 L214 4" stroke="#1b1b1b" strokeWidth="6" strokeLinecap="round" />
+          <path d="M220 39 L236 42" stroke="#1b1b1b" strokeWidth="6" strokeLinecap="round" />
+          <path d="M78 112 L72 148" stroke="#1b1b1b" strokeWidth="7" strokeLinecap="round" />
+          <path d="M102 114 L98 148" stroke="#1b1b1b" strokeWidth="7" strokeLinecap="round" />
+          <path d="M132 112 L128 148" stroke="#1b1b1b" strokeWidth="7" strokeLinecap="round" />
+          <path d="M152 108 L160 148" stroke="#1b1b1b" strokeWidth="7" strokeLinecap="round" />
           <rect
-            x="90"
-            y="57"
+            x="96"
+            y="76"
             rx="8"
             ry="8"
-            width="38"
+            width="34"
             height="24"
             fill={color}
             stroke="#1b1b1b"
             strokeWidth="4"
           />
-          <circle cx="160" cy="34" r="4" fill="#1b1b1b" />
+          <circle cx="208" cy="34" r="3.5" fill="#1b1b1b" />
         </g>
       </svg>
 
@@ -83,8 +88,8 @@ function HorseIcon({ horseId, number, size = 76 }) {
           position: "absolute",
           right: -2,
           top: -4,
-          width: Math.round(size * 0.27),
-          height: Math.round(size * 0.27),
+          width: Math.round(size * 0.28),
+          height: Math.round(size * 0.28),
           borderRadius: "50%",
           background: color,
           color: "#fff",
@@ -167,7 +172,7 @@ function TrackLane({ horse, percent, overlay, showResult }) {
       <div
         style={{
           position: "relative",
-          height: 58,
+          height: 60,
           borderRadius: 999,
           border: "1px solid #dfdfd8",
           background: "linear-gradient(to right, #fbfbf8, #f2f2ec)",
@@ -224,9 +229,10 @@ function TrackLane({ horse, percent, overlay, showResult }) {
             top: "50%",
             transform: "translate(-50%, -50%)",
             zIndex: 2,
+            willChange: "left, transform",
           }}
         >
-          <HorseIcon horseId={horse.horse_id} number={horse.horse_id} size={68} />
+          <HorseIcon horseId={horse.horse_id} number={horse.horse_id} size={72} />
         </div>
       </div>
     </div>
@@ -243,6 +249,38 @@ function normalizeLogsByHorse(logs, horses) {
   return map;
 }
 
+function buildFallbackSnapshots(horses, ranking) {
+  if (!horses.length) return [];
+
+  const rankMap = Object.fromEntries(
+    (ranking || []).map((r) => [r.horse_id, r])
+  );
+
+  const finals = horses.map((h) => {
+    const ranked = rankMap[h.horse_id];
+    const dist =
+      ranked?.final_distance ??
+      h.final_distance ??
+      0;
+
+    return {
+      horse_id: h.horse_id,
+      total: Math.max(1, Number(dist) || 1),
+    };
+  });
+
+  return SEGMENTS.map((label, index) => {
+    const ratio = (index + 1) / SEGMENTS.length;
+    return {
+      segment: label,
+      positions: finals.map((f) => ({
+        horse_id: f.horse_id,
+        total: f.total * ratio,
+      })),
+    };
+  });
+}
+
 export default function DerbyHostPage() {
   const [room, setRoom] = useState(null);
   const [horses, setHorses] = useState([]);
@@ -255,6 +293,7 @@ export default function DerbyHostPage() {
   const [playKey, setPlayKey] = useState("");
 
   const animationRef = useRef(null);
+  const lastStartedKeyRef = useRef("");
 
   const load = useCallback(async () => {
     const { data: roomData, error: roomError } = await supabase
@@ -347,11 +386,7 @@ export default function DerbyHostPage() {
         },
         () => load()
       )
-      .subscribe((status) => {
-        if (status === "CHANNEL_ERROR") {
-          console.error("realtime subscribe error");
-        }
-      });
+      .subscribe();
 
     const fallbackId = setInterval(() => {
       load();
@@ -359,6 +394,7 @@ export default function DerbyHostPage() {
 
     return () => {
       clearInterval(fallbackId);
+      if (animationRef.current) cancelAnimationFrame(animationRef.current);
       supabase.removeChannel(channel);
     };
   }, [load]);
@@ -372,16 +408,19 @@ export default function DerbyHostPage() {
     return neededPlayers.every((p) => allBetPlayers.includes(p));
   }, [room?.player_count, allBetPlayers]);
 
-  const resultSnapshots = room?.result_payload?.segmentSnapshots || [];
   const resultRanking = room?.result_payload?.ranking || [];
   const resultLogs = room?.result_payload?.logs || [];
+
+  const usableSnapshots = useMemo(() => {
+    const raw = room?.result_payload?.segmentSnapshots || [];
+    if (raw.length) return raw;
+    return buildFallbackSnapshots(horses, resultRanking);
+  }, [room?.result_payload?.segmentSnapshots, horses, resultRanking]);
 
   useEffect(() => {
     const nextKey =
       room?.phase === "race" && room?.result_payload
-        ? `${room.race_number}:${room.updated_at || ""}:${JSON.stringify(
-            room.result_payload.ranking || []
-          )}`
+        ? `${room.race_number}:${room.updated_at || ""}`
         : "";
 
     if (!nextKey) {
@@ -389,11 +428,13 @@ export default function DerbyHostPage() {
       setActiveSegmentIndex(-1);
       setRunningRace(false);
       setPlayKey("");
+      lastStartedKeyRef.current = "";
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
       return;
     }
 
-    if (nextKey === playKey) return;
+    if (lastStartedKeyRef.current === nextKey) return;
+    lastStartedKeyRef.current = nextKey;
 
     setPlayKey(nextKey);
     setProgress(0);
@@ -424,16 +465,12 @@ export default function DerbyHostPage() {
     };
 
     animationRef.current = requestAnimationFrame(tick);
-
-    return () => {
-      if (animationRef.current) cancelAnimationFrame(animationRef.current);
-    };
-  }, [room, playKey]);
+  }, [room]);
 
   const interpolatedPositions = useMemo(() => {
     const base = Object.fromEntries(horses.map((h) => [h.horse_id, 3]));
 
-    if (!resultSnapshots.length) {
+    if (!usableSnapshots.length) {
       return base;
     }
 
@@ -441,33 +478,35 @@ export default function DerbyHostPage() {
     const segIndex = Math.min(SEGMENTS.length - 1, Math.floor(segmentFloat));
     const localT = Math.max(0, Math.min(1, segmentFloat - segIndex));
 
-    const prevSnapshot = segIndex <= 0 ? null : resultSnapshots[segIndex - 1];
-    const currentSnapshot = resultSnapshots[segIndex];
+    const prevSnapshot = segIndex <= 0 ? null : usableSnapshots[segIndex - 1];
+    const currentSnapshot = usableSnapshots[segIndex];
 
-    if (!currentSnapshot) return base;
+    if (!currentSnapshot?.positions?.length) return base;
 
     const currentMap = Object.fromEntries(
       currentSnapshot.positions.map((p) => [p.horse_id, p.total])
     );
-    const prevMap = prevSnapshot
+    const prevMap = prevSnapshot?.positions?.length
       ? Object.fromEntries(prevSnapshot.positions.map((p) => [p.horse_id, p.total]))
       : {};
 
     const maxTotal = Math.max(
-      ...resultSnapshots.flatMap((s) => s.positions.map((p) => p.total)),
+      ...usableSnapshots.flatMap((s) =>
+        (s.positions || []).map((p) => Number(p.total) || 0)
+      ),
       1
     );
 
     const result = {};
     horses.forEach((horse) => {
-      const currentTotal = currentMap[horse.horse_id] ?? 0;
-      const previousTotal = prevSnapshot ? prevMap[horse.horse_id] ?? 0 : 0;
+      const currentTotal = Number(currentMap[horse.horse_id] ?? 0);
+      const previousTotal = Number(prevMap[horse.horse_id] ?? 0);
       const mixed = previousTotal + (currentTotal - previousTotal) * localT;
       result[horse.horse_id] = Math.max(3, Math.min(95, (mixed / maxTotal) * 95));
     });
 
     return result;
-  }, [horses, resultSnapshots, progress]);
+  }, [horses, usableSnapshots, progress]);
 
   const logsByHorse = useMemo(
     () => normalizeLogsByHorse(resultLogs, horses),
@@ -511,7 +550,7 @@ export default function DerbyHostPage() {
 
     return horses.map((horse) => ({
       ...horse,
-      final_rank: rankMap[horse.horse_id] ?? null,
+      final_rank: rankMap[horse.horse_id] ?? horse.final_rank ?? null,
     }));
   }, [horses, resultRanking]);
 
