@@ -15,31 +15,39 @@ const HORSE_IMAGE_SRC = {
   "05": "/derby/horses/horse-05.png",
 };
 
-// レース全体を少し長くして観戦しやすくする
-const RACE_DURATION_MS = 12500;
+const RACE_DURATION_MS = 30000;
+const START_OVERLAY_MS = 1800;
+const RESULT_HOLD_MS = 1000;
+const FINISH_PHASE_START = 0.82;
 
-// ここから終盤の「全頭ゴール演出」に入る
-const FINISH_PHASE_START = 0.72;
-
-// ゴール後の静止時間
-const RESULT_HOLD_MS = 650;
-
-// ゴール後の順位表示を段階的に出す
 const RANK_REVEAL_1_MS = 0;
-const RANK_REVEAL_2_MS = 220;
-const RANK_REVEAL_3PLUS_MS = 460;
+const RANK_REVEAL_2_MS = 260;
+const RANK_REVEAL_3PLUS_MS = 540;
 
-// 最終ゴール配置
 const FINISH_POSITIONS = [95, 92.5, 90, 88, 86];
 
-function HorseIcon({ horseId, size = 96 }) {
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function easeOutCubic(t) {
+  return 1 - Math.pow(1 - t, 3);
+}
+
+function easeInOutCubic(t) {
+  return t < 0.5
+    ? 4 * t * t * t
+    : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+function HorseIcon({ horseId, size = 100 }) {
   const src = HORSE_IMAGE_SRC[horseId] || HORSE_IMAGE_SRC["01"];
 
   return (
     <div
       style={{
         width: size,
-        height: size * 0.7,
+        height: size * 0.72,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -108,6 +116,106 @@ function canRevealRank(rank, revealElapsedMs) {
   return revealElapsedMs >= RANK_REVEAL_3PLUS_MS;
 }
 
+function BackgroundStage({ isFinishPhase }) {
+  return (
+    <div
+      aria-hidden="true"
+      style={{
+        position: "absolute",
+        inset: 0,
+        overflow: "hidden",
+        pointerEvents: "none",
+        zIndex: 0,
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          background: isFinishPhase
+            ? "radial-gradient(circle at center, rgba(255,255,255,0.98) 0%, rgba(247,247,243,0.96) 58%, rgba(241,241,236,0.98) 100%)"
+            : "radial-gradient(circle at center, rgba(255,255,255,0.98) 0%, rgba(248,248,244,0.96) 60%, rgba(242,242,238,0.98) 100%)",
+          transition: "background 260ms ease",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          top: "-12%",
+          left: "-6%",
+          width: "112%",
+          height: "140%",
+          background:
+            "repeating-linear-gradient(180deg, rgba(0,0,0,0.018) 0px, rgba(0,0,0,0.018) 1px, transparent 1px, transparent 84px)",
+          opacity: isFinishPhase ? 0.38 : 0.24,
+          transition: "opacity 260ms ease",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          background:
+            "linear-gradient(90deg, rgba(0,0,0,0.02) 0%, transparent 12%, transparent 88%, rgba(0,0,0,0.03) 100%)",
+        }}
+      />
+    </div>
+  );
+}
+
+function StartOverlay({ show, elapsedMs }) {
+  if (!show) return null;
+
+  const t = clamp(elapsedMs / START_OVERLAY_MS, 0, 1);
+  const scale = 1.18 - 0.18 * easeOutCubic(t);
+  const opacity = 1 - easeOutCubic(t);
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        display: "grid",
+        placeItems: "center",
+        zIndex: 20,
+        pointerEvents: "none",
+      }}
+    >
+      <div
+        style={{
+          transform: `scale(${scale})`,
+          opacity,
+          transition: "none",
+          textAlign: "center",
+        }}
+      >
+        <div
+          style={{
+            fontSize: "clamp(40px, 8vw, 92px)",
+            fontWeight: 900,
+            lineHeight: 0.92,
+            letterSpacing: "0.06em",
+            color: "#111",
+          }}
+        >
+          START
+        </div>
+        <div
+          style={{
+            marginTop: 8,
+            fontSize: "clamp(12px, 1.6vw, 18px)",
+            fontWeight: 700,
+            letterSpacing: "0.22em",
+            color: "rgba(17,17,17,0.65)",
+          }}
+        >
+          GATES OPEN
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TrackLane({
   horse,
   percent,
@@ -117,28 +225,37 @@ function TrackLane({
   progress,
   isFinishPhase,
   revealElapsedMs,
+  laneIndex,
 }) {
-  const isWinner = showResult && horse.final_rank === 1;
   const shouldShowRank =
     showResult &&
     horse.final_rank &&
     canRevealRank(horse.final_rank, revealElapsedMs);
 
-  const bobStrength = runningRace
-    ? isFinishPhase
-      ? 2.8
-      : 2
-    : 0;
+  const isWinner = shouldShowRank && horse.final_rank === 1;
 
-  const bob = runningRace ? Math.sin(progress * 24) * bobStrength : 0;
+  const phaseBoost = isFinishPhase ? 1.45 : 1;
+  const strideSpeed = isFinishPhase ? 34 : 24;
+  const bob =
+    runningRace
+      ? Math.sin(progress * strideSpeed + laneIndex * 0.85) * 2.1 * phaseBoost
+      : 0;
+
+  const lean = runningRace
+    ? isFinishPhase
+      ? -3.2
+      : -1.4
+    : 0;
 
   return (
     <div
       style={{
+        position: "relative",
         display: "grid",
         gridTemplateColumns: "118px 1fr",
         gap: 8,
         alignItems: "center",
+        zIndex: 1,
       }}
     >
       <div
@@ -166,13 +283,14 @@ function TrackLane({
       <div
         style={{
           position: "relative",
-          height: 72,
+          height: 76,
           borderRadius: 999,
           border: "1px solid #dfdfd8",
           background: isFinishPhase
-            ? "linear-gradient(to right, #fcfcfa, #f4f3ee)"
-            : "linear-gradient(to right, #fbfbf8, #f2f2ec)",
+            ? "linear-gradient(to right, rgba(255,255,255,0.92), rgba(245,244,239,0.96))"
+            : "linear-gradient(to right, rgba(255,255,255,0.88), rgba(244,244,240,0.94))",
           overflow: "hidden",
+          transition: "background 260ms ease",
         }}
       >
         {[20, 40, 60, 80].map((x) => (
@@ -207,7 +325,7 @@ function TrackLane({
             style={{
               position: "absolute",
               left: 8,
-              top: 7,
+              top: 8,
               zIndex: 3,
               maxWidth: "48%",
               overflow: "hidden",
@@ -238,15 +356,16 @@ function TrackLane({
             position: "absolute",
             left: `${percent}%`,
             top: "50%",
-            transform: `translate(-42%, -50%) translateY(${bob}px) scale(${
-              isWinner ? 1.05 : 1
+            transform: `translate(-42%, -50%) translateY(${bob}px) rotate(${lean}deg) scale(${
+              isWinner ? 1.06 : isFinishPhase ? 1.02 : 1
             })`,
             zIndex: 2,
             willChange: "left, transform",
             transition: showResult ? "transform 220ms ease" : "none",
+            filter: isWinner ? "drop-shadow(0 4px 10px rgba(0,0,0,0.08))" : "none",
           }}
         >
-          <HorseIcon horseId={horse.horse_id} size={96} />
+          <HorseIcon horseId={horse.horse_id} size={100} />
         </div>
       </div>
     </div>
@@ -303,6 +422,7 @@ export default function DerbyHostPage() {
   const [bets, setBets] = useState([]);
 
   const [progress, setProgress] = useState(0);
+  const [raceElapsedMs, setRaceElapsedMs] = useState(0);
   const [activeSegmentIndex, setActiveSegmentIndex] = useState(-1);
   const [runningRace, setRunningRace] = useState(false);
   const [playKey, setPlayKey] = useState("");
@@ -310,9 +430,9 @@ export default function DerbyHostPage() {
   const [revealElapsedMs, setRevealElapsedMs] = useState(0);
 
   const animationRef = useRef(null);
-  const lastStartedKeyRef = useRef("");
   const holdTimerRef = useRef(null);
   const revealTimerRef = useRef(null);
+  const lastStartedKeyRef = useRef("");
 
   const load = useCallback(async () => {
     const { data: roomData, error: roomError } = await supabase
@@ -449,6 +569,7 @@ export default function DerbyHostPage() {
 
     if (!nextKey) {
       setProgress(0);
+      setRaceElapsedMs(0);
       setActiveSegmentIndex(-1);
       setRunningRace(false);
       setPlayKey("");
@@ -467,6 +588,7 @@ export default function DerbyHostPage() {
 
     setPlayKey(nextKey);
     setProgress(0);
+    setRaceElapsedMs(0);
     setActiveSegmentIndex(0);
     setRunningRace(true);
     setResultHoldDone(false);
@@ -480,16 +602,29 @@ export default function DerbyHostPage() {
 
     const tick = (now) => {
       const elapsed = now - startedAt;
-      const nextProgress = Math.min(1, elapsed / RACE_DURATION_MS);
-      setProgress(nextProgress);
+      const rawT = clamp(elapsed / RACE_DURATION_MS, 0, 1);
+
+      setRaceElapsedMs(elapsed);
+
+      let visualT = rawT;
+      if (rawT < FINISH_PHASE_START) {
+        const local = rawT / FINISH_PHASE_START;
+        visualT = easeInOutCubic(local) * FINISH_PHASE_START;
+      } else {
+        const finishLocal = (rawT - FINISH_PHASE_START) / (1 - FINISH_PHASE_START);
+        visualT =
+          FINISH_PHASE_START + easeInOutCubic(finishLocal) * (1 - FINISH_PHASE_START);
+      }
+
+      setProgress(visualT);
 
       const seg = Math.min(
         SEGMENTS.length - 1,
-        Math.floor(nextProgress * SEGMENTS.length)
+        Math.floor(visualT * SEGMENTS.length)
       );
       setActiveSegmentIndex(seg);
 
-      if (nextProgress < 1) {
+      if (rawT < 1) {
         animationRef.current = requestAnimationFrame(tick);
       } else {
         setRunningRace(false);
@@ -502,7 +637,7 @@ export default function DerbyHostPage() {
             const revealElapsed = performance.now() - revealStartedAt;
             setRevealElapsedMs(revealElapsed);
 
-            if (revealElapsed > RANK_REVEAL_3PLUS_MS + 400) {
+            if (revealElapsed > RANK_REVEAL_3PLUS_MS + 420) {
               clearInterval(revealTimerRef.current);
             }
           }, 30);
@@ -514,6 +649,7 @@ export default function DerbyHostPage() {
   }, [room]);
 
   const isFinishPhase = runningRace && progress >= FINISH_PHASE_START;
+  const showStartOverlay = runningRace && raceElapsedMs <= START_OVERLAY_MS;
 
   const racePhasePositions = useMemo(() => {
     const base = Object.fromEntries(horses.map((h) => [h.horse_id, 12]));
@@ -528,7 +664,7 @@ export default function DerbyHostPage() {
 
     const segmentFloat = phaseNormalized * SEGMENTS.length;
     const segIndex = Math.min(SEGMENTS.length - 1, Math.floor(segmentFloat));
-    const localT = Math.max(0, Math.min(1, segmentFloat - segIndex));
+    const localT = clamp(segmentFloat - segIndex, 0, 1);
 
     const prevSnapshot = segIndex <= 0 ? null : usableSnapshots[segIndex - 1];
     const currentSnapshot = usableSnapshots[segIndex];
@@ -553,19 +689,20 @@ export default function DerbyHostPage() {
     );
 
     const result = {};
-    horses.forEach((horse) => {
+    horses.forEach((horse, index) => {
       const currentTotal = Number(currentMap[horse.horse_id] ?? 0);
       const previousTotal = Number(prevMap[horse.horse_id] ?? 0);
       const mixed = previousTotal + (currentTotal - previousTotal) * localT;
 
-      const ratio = Math.max(0, Math.min(1, mixed / maxTotal));
+      const ratio = clamp(mixed / maxTotal, 0, 1);
       const compressed = Math.pow(ratio, 0.7);
 
+      const microVariance = Math.sin(progress * 18 + index * 0.9) * 0.18;
       const minVisual = 12;
       const maxVisual = 95;
 
       result[horse.horse_id] =
-        minVisual + compressed * (maxVisual - minVisual);
+        minVisual + compressed * (maxVisual - minVisual) + microVariance;
     });
 
     return result;
@@ -579,9 +716,10 @@ export default function DerbyHostPage() {
     }
 
     if (runningRace && progress >= FINISH_PHASE_START) {
-      const finishT = Math.max(
+      const finishT = clamp(
+        (progress - FINISH_PHASE_START) / (1 - FINISH_PHASE_START),
         0,
-        Math.min(1, (progress - FINISH_PHASE_START) / (1 - FINISH_PHASE_START))
+        1
       );
 
       resultRanking.forEach((r) => {
@@ -711,6 +849,7 @@ export default function DerbyHostPage() {
       >
         <section
           style={{
+            position: "relative",
             border: "1px solid #e5e5df",
             borderRadius: 16,
             background: "#fff",
@@ -720,9 +859,12 @@ export default function DerbyHostPage() {
             gap: 8,
             flexWrap: "wrap",
             justifyContent: "space-between",
+            overflow: "hidden",
           }}
         >
-          <div style={{ minWidth: 0 }}>
+          <BackgroundStage isFinishPhase={isFinishPhase} />
+
+          <div style={{ minWidth: 0, position: "relative", zIndex: 1 }}>
             <div
               style={{
                 fontSize: 20,
@@ -743,6 +885,8 @@ export default function DerbyHostPage() {
               gap: 6,
               alignItems: "center",
               flexWrap: "wrap",
+              position: "relative",
+              zIndex: 1,
             }}
           >
             <LaneBadge>{`RACE ${room?.race_number || 1}`}</LaneBadge>
@@ -775,19 +919,25 @@ export default function DerbyHostPage() {
               レース開始
             </button>
           </div>
+
+          <StartOverlay show={showStartOverlay} elapsedMs={raceElapsedMs} />
         </section>
 
         <section
           style={{
+            position: "relative",
             border: "1px solid #e5e5df",
             borderRadius: 16,
             background: "#fff",
             padding: 10,
             display: "grid",
             gap: 8,
+            overflow: "hidden",
           }}
         >
-          {displayHorses.map((horse) => (
+          <BackgroundStage isFinishPhase={isFinishPhase} />
+
+          {displayHorses.map((horse, index) => (
             <TrackLane
               key={`${horse.horse_id}-${playKey || "idle"}`}
               horse={horse}
@@ -798,6 +948,7 @@ export default function DerbyHostPage() {
               progress={progress}
               isFinishPhase={isFinishPhase}
               revealElapsedMs={revealElapsedMs}
+              laneIndex={index}
             />
           ))}
         </section>
