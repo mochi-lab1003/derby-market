@@ -15,6 +15,23 @@ const HORSE_IMAGE_SRC = {
   "05": "/derby/horses/horse-05.png",
 };
 
+// レース全体を少し長くして観戦しやすくする
+const RACE_DURATION_MS = 12500;
+
+// ここから終盤の「全頭ゴール演出」に入る
+const FINISH_PHASE_START = 0.72;
+
+// ゴール後の静止時間
+const RESULT_HOLD_MS = 650;
+
+// ゴール後の順位表示を段階的に出す
+const RANK_REVEAL_1_MS = 0;
+const RANK_REVEAL_2_MS = 220;
+const RANK_REVEAL_3PLUS_MS = 460;
+
+// 最終ゴール配置
+const FINISH_POSITIONS = [95, 92.5, 90, 88, 86];
+
 function HorseIcon({ horseId, size = 96 }) {
   const src = HORSE_IMAGE_SRC[horseId] || HORSE_IMAGE_SRC["01"];
 
@@ -50,6 +67,7 @@ function LaneBadge({ children, tone = "neutral" }) {
     event: { bg: "#fff6df", fg: "#6d5500", bd: "#ead9a8" },
     result: { bg: "#eef6ff", fg: "#174b86", bd: "#cfe2fb" },
     winner: { bg: "#111", fg: "#fff", bd: "#111" },
+    spurt: { bg: "#111", fg: "#fff", bd: "#111" },
   };
 
   const c = tones[tone] || tones.neutral;
@@ -84,6 +102,12 @@ function shortenOverlay(text) {
   return text;
 }
 
+function canRevealRank(rank, revealElapsedMs) {
+  if (rank === 1) return revealElapsedMs >= RANK_REVEAL_1_MS;
+  if (rank === 2) return revealElapsedMs >= RANK_REVEAL_2_MS;
+  return revealElapsedMs >= RANK_REVEAL_3PLUS_MS;
+}
+
 function TrackLane({
   horse,
   percent,
@@ -91,9 +115,22 @@ function TrackLane({
   showResult,
   runningRace,
   progress,
+  isFinishPhase,
+  revealElapsedMs,
 }) {
-  const bob = runningRace ? Math.sin(progress * 22) * 2 : 0;
   const isWinner = showResult && horse.final_rank === 1;
+  const shouldShowRank =
+    showResult &&
+    horse.final_rank &&
+    canRevealRank(horse.final_rank, revealElapsedMs);
+
+  const bobStrength = runningRace
+    ? isFinishPhase
+      ? 2.8
+      : 2
+    : 0;
+
+  const bob = runningRace ? Math.sin(progress * 24) * bobStrength : 0;
 
   return (
     <div
@@ -132,7 +169,9 @@ function TrackLane({
           height: 72,
           borderRadius: 999,
           border: "1px solid #dfdfd8",
-          background: "linear-gradient(to right, #fbfbf8, #f2f2ec)",
+          background: isFinishPhase
+            ? "linear-gradient(to right, #fcfcfa, #f4f3ee)"
+            : "linear-gradient(to right, #fbfbf8, #f2f2ec)",
           overflow: "hidden",
         }}
       >
@@ -163,7 +202,7 @@ function TrackLane({
           }}
         />
 
-        {overlay && (
+        {overlay && runningRace && !isFinishPhase && (
           <div
             style={{
               position: "absolute",
@@ -178,7 +217,7 @@ function TrackLane({
           </div>
         )}
 
-        {showResult && horse.final_rank && (
+        {shouldShowRank && (
           <div
             style={{
               position: "absolute",
@@ -253,6 +292,10 @@ function buildFallbackSnapshots(horses, ranking) {
   });
 }
 
+function getRankFinishPosition(rank) {
+  return FINISH_POSITIONS[rank - 1] ?? 85;
+}
+
 export default function DerbyHostPage() {
   const [room, setRoom] = useState(null);
   const [horses, setHorses] = useState([]);
@@ -263,9 +306,13 @@ export default function DerbyHostPage() {
   const [activeSegmentIndex, setActiveSegmentIndex] = useState(-1);
   const [runningRace, setRunningRace] = useState(false);
   const [playKey, setPlayKey] = useState("");
+  const [resultHoldDone, setResultHoldDone] = useState(false);
+  const [revealElapsedMs, setRevealElapsedMs] = useState(0);
 
   const animationRef = useRef(null);
   const lastStartedKeyRef = useRef("");
+  const holdTimerRef = useRef(null);
+  const revealTimerRef = useRef(null);
 
   const load = useCallback(async () => {
     const { data: roomData, error: roomError } = await supabase
@@ -367,6 +414,8 @@ export default function DerbyHostPage() {
     return () => {
       clearInterval(fallbackId);
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
+      if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
+      if (revealTimerRef.current) clearInterval(revealTimerRef.current);
       supabase.removeChannel(channel);
     };
   }, [load]);
@@ -403,8 +452,13 @@ export default function DerbyHostPage() {
       setActiveSegmentIndex(-1);
       setRunningRace(false);
       setPlayKey("");
+      setResultHoldDone(false);
+      setRevealElapsedMs(0);
       lastStartedKeyRef.current = "";
+
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
+      if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
+      if (revealTimerRef.current) clearInterval(revealTimerRef.current);
       return;
     }
 
@@ -415,15 +469,18 @@ export default function DerbyHostPage() {
     setProgress(0);
     setActiveSegmentIndex(0);
     setRunningRace(true);
+    setResultHoldDone(false);
+    setRevealElapsedMs(0);
 
     if (animationRef.current) cancelAnimationFrame(animationRef.current);
+    if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
+    if (revealTimerRef.current) clearInterval(revealTimerRef.current);
 
-    const duration = 9000;
     const startedAt = performance.now();
 
     const tick = (now) => {
       const elapsed = now - startedAt;
-      const nextProgress = Math.min(1, elapsed / duration);
+      const nextProgress = Math.min(1, elapsed / RACE_DURATION_MS);
       setProgress(nextProgress);
 
       const seg = Math.min(
@@ -436,20 +493,40 @@ export default function DerbyHostPage() {
         animationRef.current = requestAnimationFrame(tick);
       } else {
         setRunningRace(false);
+
+        holdTimerRef.current = setTimeout(() => {
+          setResultHoldDone(true);
+
+          const revealStartedAt = performance.now();
+          revealTimerRef.current = setInterval(() => {
+            const revealElapsed = performance.now() - revealStartedAt;
+            setRevealElapsedMs(revealElapsed);
+
+            if (revealElapsed > RANK_REVEAL_3PLUS_MS + 400) {
+              clearInterval(revealTimerRef.current);
+            }
+          }, 30);
+        }, RESULT_HOLD_MS);
       }
     };
 
     animationRef.current = requestAnimationFrame(tick);
   }, [room]);
 
-  const interpolatedPositions = useMemo(() => {
+  const isFinishPhase = runningRace && progress >= FINISH_PHASE_START;
+
+  const racePhasePositions = useMemo(() => {
     const base = Object.fromEntries(horses.map((h) => [h.horse_id, 12]));
 
     if (!usableSnapshots.length) {
       return base;
     }
 
-    const segmentFloat = progress * SEGMENTS.length;
+    const effectiveProgress = Math.min(progress, FINISH_PHASE_START);
+    const phaseNormalized =
+      FINISH_PHASE_START > 0 ? effectiveProgress / FINISH_PHASE_START : 1;
+
+    const segmentFloat = phaseNormalized * SEGMENTS.length;
     const segIndex = Math.min(SEGMENTS.length - 1, Math.floor(segmentFloat));
     const localT = Math.max(0, Math.min(1, segmentFloat - segIndex));
 
@@ -491,15 +568,39 @@ export default function DerbyHostPage() {
         minVisual + compressed * (maxVisual - minVisual);
     });
 
-    if (!runningRace && resultRanking.length) {
-      const finishPositions = [95, 93, 91, 89, 87];
+    return result;
+  }, [horses, usableSnapshots, progress]);
+
+  const interpolatedPositions = useMemo(() => {
+    const result = { ...racePhasePositions };
+
+    if (!resultRanking.length) {
+      return result;
+    }
+
+    if (runningRace && progress >= FINISH_PHASE_START) {
+      const finishT = Math.max(
+        0,
+        Math.min(1, (progress - FINISH_PHASE_START) / (1 - FINISH_PHASE_START))
+      );
+
       resultRanking.forEach((r) => {
-        result[r.horse_id] = finishPositions[r.final_rank - 1] ?? 85;
+        const from = racePhasePositions[r.horse_id] ?? 12;
+        const to = getRankFinishPosition(r.final_rank);
+        result[r.horse_id] = from + (to - from) * finishT;
+      });
+
+      return result;
+    }
+
+    if (!runningRace) {
+      resultRanking.forEach((r) => {
+        result[r.horse_id] = getRankFinishPosition(r.final_rank);
       });
     }
 
     return result;
-  }, [horses, usableSnapshots, progress, runningRace, resultRanking]);
+  }, [racePhasePositions, resultRanking, runningRace, progress]);
 
   const logsByHorse = useMemo(
     () => normalizeLogsByHorse(resultLogs, horses),
@@ -546,6 +647,16 @@ export default function DerbyHostPage() {
       final_rank: rankMap[horse.horse_id] ?? horse.final_rank ?? null,
     }));
   }, [horses, resultRanking]);
+
+  const headerLabel = useMemo(() => {
+    if (runningRace && progress >= FINISH_PHASE_START) return "LAST SPURT";
+    if (runningRace && activeSegmentIndex >= 0) {
+      return SEGMENTS[activeSegmentIndex];
+    }
+    return room?.phase || "setup";
+  }, [runningRace, progress, activeSegmentIndex, room?.phase]);
+
+  const showResults = !runningRace && resultRanking.length > 0 && resultHoldDone;
 
   async function runRaceFromHost() {
     if (!allBetsConfirmed || runningRace || room?.phase !== "bet") return;
@@ -635,10 +746,8 @@ export default function DerbyHostPage() {
             }}
           >
             <LaneBadge>{`RACE ${room?.race_number || 1}`}</LaneBadge>
-            <LaneBadge>
-              {runningRace && activeSegmentIndex >= 0
-                ? SEGMENTS[activeSegmentIndex]
-                : room?.phase || "setup"}
+            <LaneBadge tone={runningRace && progress >= FINISH_PHASE_START ? "spurt" : "neutral"}>
+              {headerLabel}
             </LaneBadge>
             <button
               onClick={runRaceFromHost}
@@ -684,9 +793,11 @@ export default function DerbyHostPage() {
               horse={horse}
               percent={interpolatedPositions[horse.horse_id] ?? 12}
               overlay={laneOverlays[horse.horse_id]}
-              showResult={!!resultRanking.length && !runningRace}
+              showResult={showResults}
               runningRace={runningRace}
               progress={progress}
+              isFinishPhase={isFinishPhase}
+              revealElapsedMs={revealElapsedMs}
             />
           ))}
         </section>
