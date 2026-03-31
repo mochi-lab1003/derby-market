@@ -15,14 +15,14 @@ const HORSE_IMAGE_SRC = {
   "05": "/derby/horses/horse-05.png",
 };
 
-function HorseIcon({ horseId, size = 78 }) {
+function HorseIcon({ horseId, size = 96 }) {
   const src = HORSE_IMAGE_SRC[horseId] || HORSE_IMAGE_SRC["01"];
 
   return (
     <div
       style={{
         width: size,
-        height: size * 0.62,
+        height: size * 0.7,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -129,7 +129,7 @@ function TrackLane({
       <div
         style={{
           position: "relative",
-          height: 64,
+          height: 72,
           borderRadius: 999,
           border: "1px solid #dfdfd8",
           background: "linear-gradient(to right, #fbfbf8, #f2f2ec)",
@@ -199,7 +199,7 @@ function TrackLane({
             position: "absolute",
             left: `${percent}%`,
             top: "50%",
-            transform: `translate(-50%, -50%) translateY(${bob}px) scale(${
+            transform: `translate(-42%, -50%) translateY(${bob}px) scale(${
               isWinner ? 1.05 : 1
             })`,
             zIndex: 2,
@@ -207,7 +207,7 @@ function TrackLane({
             transition: showResult ? "transform 220ms ease" : "none",
           }}
         >
-          <HorseIcon horseId={horse.horse_id} size={78} />
+          <HorseIcon horseId={horse.horse_id} size={96} />
         </div>
       </div>
     </div>
@@ -443,7 +443,7 @@ export default function DerbyHostPage() {
   }, [room]);
 
   const interpolatedPositions = useMemo(() => {
-    const base = Object.fromEntries(horses.map((h) => [h.horse_id, 18]));
+    const base = Object.fromEntries(horses.map((h) => [h.horse_id, 12]));
 
     if (!usableSnapshots.length) {
       return base;
@@ -484,7 +484,7 @@ export default function DerbyHostPage() {
       const ratio = Math.max(0, Math.min(1, mixed / maxTotal));
       const compressed = Math.pow(ratio, 0.7);
 
-      const minVisual = 18;
+      const minVisual = 12;
       const maxVisual = 95;
 
       result[horse.horse_id] =
@@ -682,7 +682,7 @@ export default function DerbyHostPage() {
             <TrackLane
               key={`${horse.horse_id}-${playKey || "idle"}`}
               horse={horse}
-              percent={interpolatedPositions[horse.horse_id] ?? 18}
+              percent={interpolatedPositions[horse.horse_id] ?? 12}
               overlay={laneOverlays[horse.horse_id]}
               showResult={!!resultRanking.length && !runningRace}
               runningRace={runningRace}
