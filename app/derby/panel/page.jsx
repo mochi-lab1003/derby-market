@@ -57,13 +57,21 @@ function judgeBet(bet, ranking) {
   return { hit: false, payout: 0 };
 }
 
-const EMPTY_NAMES = {
+const EMPTY_HORSE_NAMES = {
   "01": "",
   "02": "",
   "03": "",
   "04": "",
   "05": "",
 };
+
+function buildEmptyPlayerNames(count = 7) {
+  const result = {};
+  for (let i = 1; i <= count; i += 1) {
+    result[`P${i}`] = "";
+  }
+  return result;
+}
 
 export default function DerbyPanelPage() {
   const [room, setRoom] = useState(null);
@@ -82,9 +90,10 @@ export default function DerbyPanelPage() {
   const [triThird, setTriThird] = useState(null);
   const [stake, setStake] = useState("1");
 
-  const [horseNames, setHorseNames] = useState(EMPTY_NAMES);
-  const [isEditingNames, setIsEditingNames] = useState(false);
+  const [horseNames, setHorseNames] = useState(EMPTY_HORSE_NAMES);
+  const [playerNames, setPlayerNames] = useState(buildEmptyPlayerNames());
 
+  const [isEditingNames, setIsEditingNames] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -102,7 +111,17 @@ export default function DerbyPanelPage() {
         horseRows.map((h) => [h.horse_id, h.display_name || ""])
       )
     );
-    namesDirtyRef.current = false;
+  }
+
+  function hydratePlayerNamesFromRoom(roomData) {
+    const raw = roomData?.player_names || {};
+    setPlayerNames((prev) => {
+      const next = { ...buildEmptyPlayerNames(), ...prev };
+      Object.keys(next).forEach((key) => {
+        next[key] = raw[key] || "";
+      });
+      return next;
+    });
   }
 
   async function load({ syncNames = true } = {}) {
@@ -154,15 +173,15 @@ export default function DerbyPanelPage() {
 
     const canSyncNames =
       syncNames &&
-      horseRows.length &&
       !isEditingNamesRef.current &&
       !namesDirtyRef.current;
 
     if (canSyncNames) {
-      hydrateHorseNamesFromRows(horseRows);
-    } else if (!horseRows.length) {
-      setHorseNames(EMPTY_NAMES);
+      if (horseRows.length) hydrateHorseNamesFromRows(horseRows);
+      hydratePlayerNamesFromRoom(roomData || null);
       namesDirtyRef.current = false;
+    } else if (!horseRows.length) {
+      setHorseNames(EMPTY_HORSE_NAMES);
     }
   }
 
@@ -179,6 +198,9 @@ export default function DerbyPanelPage() {
   const playerCount = room?.player_count ?? 3;
   const raceNumber = room?.race_number ?? 1;
   const players = getPlayers(playerCount);
+
+  const displayPlayerName = (playerId) =>
+    playerNames[playerId]?.trim() || playerId;
 
   const cardsUsedBySelectedPlayer = useMemo(() => {
     if (!selectedPlayer) return new Set();
@@ -258,6 +280,7 @@ export default function DerbyPanelPage() {
 
     try {
       const playerCountValue = Number(count);
+      const nextPlayers = getPlayers(playerCountValue);
 
       const roomRes = await supabase.from("derby_rooms").upsert({
         room_id: ROOM_ID,
@@ -265,6 +288,9 @@ export default function DerbyPanelPage() {
         player_count: playerCountValue,
         race_number: 1,
         result_payload: null,
+        player_names: Object.fromEntries(
+          nextPlayers.map((playerId) => [playerId, playerNames[playerId] || ""])
+        ),
         updated_at: new Date().toISOString(),
       });
       if (roomRes.error) throw roomRes.error;
@@ -323,48 +349,52 @@ export default function DerbyPanelPage() {
     }
   }
 
-  async function saveHorseNames() {
-    if (!horses.length) {
-      setMessage("先に部屋を初期化してください。");
-      return;
-    }
-
+  async function saveSetupNames() {
     setBusy(true);
     setMessage("");
 
     try {
-      for (const horse of horses) {
-        const nextName =
-          horseNames[horse.horse_id]?.trim() || horse.display_name;
+      if (horses.length) {
+        for (const horse of horses) {
+          const nextName =
+            horseNames[horse.horse_id]?.trim() || horse.display_name;
 
-        const { error } = await supabase
-          .from("derby_horses")
-          .update({
-            display_name: nextName,
-          })
-          .eq("room_id", ROOM_ID)
-          .eq("horse_id", horse.horse_id);
+          const { error } = await supabase
+            .from("derby_horses")
+            .update({
+              display_name: nextName,
+            })
+            .eq("room_id", ROOM_ID)
+            .eq("horse_id", horse.horse_id);
 
-        if (error) throw error;
+          if (error) throw error;
+        }
       }
 
-      setIsEditingNames(false);
-      namesDirtyRef.current = false;
-
+      const nextPlayers = getPlayers(room?.player_count ?? 3);
       const roomTouchRes = await supabase
         .from("derby_rooms")
         .update({
+          player_names: Object.fromEntries(
+            nextPlayers.map((playerId) => [
+              playerId,
+              (playerNames[playerId] || "").trim(),
+            ])
+          ),
           updated_at: new Date().toISOString(),
         })
         .eq("room_id", ROOM_ID);
 
       if (roomTouchRes.error) throw roomTouchRes.error;
 
+      setIsEditingNames(false);
+      namesDirtyRef.current = false;
+
       await load({ syncNames: true });
-      setMessage("馬名を保存した。");
+      setMessage("馬名とプレイヤー名を保存した。");
     } catch (error) {
-      console.error("saveHorseNames error", error);
-      setMessage(`命名保存失敗: ${error.message || JSON.stringify(error)}`);
+      console.error("saveSetupNames error", error);
+      setMessage(`設定保存失敗: ${error.message || JSON.stringify(error)}`);
     } finally {
       setBusy(false);
     }
@@ -643,7 +673,7 @@ export default function DerbyPanelPage() {
 
   return (
     <main style={{ minHeight: "100vh", background: "#fafafa", color: "#111", padding: 16 }}>
-      <div style={{ maxWidth: 1200, margin: "0 auto", display: "grid", gap: 16 }}>
+      <div style={{ maxWidth: 1240, margin: "0 auto", display: "grid", gap: 16 }}>
         <div>
           <h1 style={{ fontSize: 32, marginBottom: 8 }}>DERBY MARKET / PANEL</h1>
           <div style={{ color: "#666" }}>操作・精算用画面</div>
@@ -661,41 +691,90 @@ export default function DerbyPanelPage() {
           </div>
         </div>
 
-        <section style={{ border: "1px solid #ddd", borderRadius: 20, background: "#fff", padding: 16, display: "grid", gap: 14 }}>
-          <div style={{ fontSize: 18 }}>セットアップ / 命名</div>
+        <section
+          style={{
+            border: "1px solid #ddd",
+            borderRadius: 20,
+            background: "#fff",
+            padding: 16,
+            display: "grid",
+            gap: 16,
+          }}
+        >
+          <div style={{ fontSize: 18, fontWeight: 700 }}>セットアップ / 命名</div>
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(5, 1fr)",
-              gap: 10,
-            }}
-          >
-            {HORSE_DEFS.map((horse) => (
-              <div key={horse.id} style={{ display: "grid", gap: 6 }}>
-                <div style={{ fontSize: 12, fontWeight: 700 }}>Horse {horse.id}</div>
-                <input
-                  value={horseNames[horse.id] || ""}
-                  onFocus={() => setIsEditingNames(true)}
-                  onChange={(e) => {
-                    namesDirtyRef.current = true;
-                    setHorseNames((prev) => ({
-                      ...prev,
-                      [horse.id]: e.target.value,
-                    }));
-                  }}
-                  placeholder={horse.defaultName}
-                  style={{
-                    padding: "10px 12px",
-                    borderRadius: 12,
-                    border: "1px solid #ddd",
-                    fontSize: 14,
-                    background: "#fff",
-                    color: "#111",
-                  }}
-                />
-              </div>
-            ))}
+          <div style={{ display: "grid", gap: 10 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#555" }}>馬名</div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(5, 1fr)",
+                gap: 10,
+              }}
+            >
+              {HORSE_DEFS.map((horse) => (
+                <div key={horse.id} style={{ display: "grid", gap: 6 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700 }}>Horse {horse.id}</div>
+                  <input
+                    value={horseNames[horse.id] || ""}
+                    onFocus={() => setIsEditingNames(true)}
+                    onChange={(e) => {
+                      namesDirtyRef.current = true;
+                      setHorseNames((prev) => ({
+                        ...prev,
+                        [horse.id]: e.target.value,
+                      }));
+                    }}
+                    placeholder={horse.defaultName}
+                    style={{
+                      padding: "10px 12px",
+                      borderRadius: 12,
+                      border: "1px solid #ddd",
+                      fontSize: 14,
+                      background: "#fff",
+                      color: "#111",
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gap: 10 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#555" }}>プレイヤー名</div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                gap: 10,
+              }}
+            >
+              {Array.from({ length: room?.player_count || 3 }, (_, i) => `P${i + 1}`).map((playerId) => (
+                <div key={playerId} style={{ display: "grid", gap: 6 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700 }}>{playerId}</div>
+                  <input
+                    value={playerNames[playerId] || ""}
+                    onFocus={() => setIsEditingNames(true)}
+                    onChange={(e) => {
+                      namesDirtyRef.current = true;
+                      setPlayerNames((prev) => ({
+                        ...prev,
+                        [playerId]: e.target.value,
+                      }));
+                    }}
+                    placeholder={playerId}
+                    style={{
+                      padding: "10px 12px",
+                      borderRadius: 12,
+                      border: "1px solid #ddd",
+                      fontSize: 14,
+                      background: "#fff",
+                      color: "#111",
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -718,18 +797,18 @@ export default function DerbyPanelPage() {
             ))}
 
             <button
-              onClick={saveHorseNames}
-              disabled={busy || !horses.length}
+              onClick={saveSetupNames}
+              disabled={busy}
               style={{
                 padding: "10px 14px",
                 borderRadius: 12,
                 border: "1px solid #111",
-                background: busy || !horses.length ? "#eee" : "#111",
-                color: busy || !horses.length ? "#999" : "#fff",
-                cursor: busy || !horses.length ? "not-allowed" : "pointer",
+                background: busy ? "#eee" : "#111",
+                color: busy ? "#999" : "#fff",
+                cursor: busy ? "not-allowed" : "pointer",
               }}
             >
-              馬名を保存
+              馬名 / プレイヤー名を保存
             </button>
 
             {(settlementEnabled || raceEnabled) && (
@@ -782,9 +861,9 @@ export default function DerbyPanelPage() {
                         active={selectedPlayer === player}
                         onClick={() => setSelectedPlayer(player)}
                       >
-                        <div style={{ fontWeight: 700 }}>{player}</div>
+                        <div style={{ fontWeight: 700 }}>{displayPlayerName(player)}</div>
                         <div style={{ fontSize: 12, color: selectedPlayer === player ? "#ddd" : "#666", marginTop: 4 }}>
-                          {bets.some((b) => b.player_id === player) ? "賭け済み" : "待機中"}
+                          {player}
                         </div>
                       </SelectCard>
                     ))}
@@ -1093,7 +1172,8 @@ export default function DerbyPanelPage() {
                             gap: 6,
                           }}
                         >
-                          <div style={{ fontWeight: 700 }}>{row.player}</div>
+                          <div style={{ fontWeight: 700 }}>{displayPlayerName(row.player)}</div>
+                          <div style={{ fontSize: 12, color: "#666" }}>{row.player}</div>
                           <div style={{ fontSize: 13, color: "#666" }}>
                             {row.bet
                               ? row.bet.bet_type === "win"
@@ -1126,7 +1206,7 @@ export default function DerbyPanelPage() {
             <div style={{ fontSize: 18 }}>現在の内容</div>
 
             <div style={{ display: "grid", gap: 8, fontSize: 14 }}>
-              <div>プレイヤー: {selectedPlayer || "-"}</div>
+              <div>プレイヤー: {selectedPlayer ? displayPlayerName(selectedPlayer) : "-"}</div>
               <div>フェーズ: {room?.phase || "-"}</div>
               <div>賭け種: {betType === "win" ? "単勝" : betType === "trifecta" ? "3連単" : "-"}</div>
               <div>
@@ -1147,7 +1227,10 @@ export default function DerbyPanelPage() {
                 const bet = bets.find((b) => b.player_id === player);
                 return (
                   <div key={player} style={{ border: "1px solid #f0f0f0", borderRadius: 14, padding: 12 }}>
-                    <div style={{ fontWeight: 700 }}>{player}</div>
+                    <div style={{ fontWeight: 700 }}>{displayPlayerName(player)}</div>
+                    <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>
+                      {player}
+                    </div>
                     <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>
                       {bet ? `${bet.bet_type === "win" ? "単勝" : "3連単"} / ${bet.cost}枚 / 確定済み` : "未確定"}
                     </div>
